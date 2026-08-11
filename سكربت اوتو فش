@@ -1,0 +1,267 @@
+-- ============================================
+-- 🎣 Auto Fish Script - With Timeout + Cancel
+-- ============================================
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- 📍 إحداثيات الصيد
+local FISHING_GOAL = Vector3.new(58.61420440673828, -11.827558517456055, -51.347198486328125)
+local BAIT_NAME = "Rare Fish Bait"
+
+-- ⏱️ إعدادات الـ Timeout (بالثواني)
+local THROW_TIMEOUT = 4      -- ينتظر 10 ثواني بعد الرمية
+local LAND_TIMEOUT = 8      -- ينتظر 10 ثواني بعد ما تعلق السمكة
+local REEL_TIMEOUT = 2      -- ينتظر 10 ثواني أثناء السحب
+local RETURN_TIMEOUT = 1     -- ينتظر 10 ثواني بعد إرجاع الخطاف
+local CANCEL_DELAY = 2        -- تأخير بعد أمر Cancel قبل الدورة الجديدة
+
+-- ============================================
+-- 🎨 إنشاء الواجهة (GUI)
+-- ============================================
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoFishGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 280, 0, 180)
+mainFrame.Position = UDim2.new(0.5, -140, 0.5, -90)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(70, 130, 220)
+mainStroke.Thickness = 2
+mainStroke.Parent = mainFrame
+
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 35)
+titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+local titleFix = Instance.new("Frame")
+titleFix.Size = UDim2.new(1, 0, 0, 10)
+titleFix.Position = UDim2.new(0, 0, 1, -10)
+titleFix.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+titleFix.BorderSizePixel = 0
+titleFix.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -40, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🎣 Auto Fish (Timeout Mode)"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -35, 0, 2)
+closeButton.BackgroundColor3 = Color3.fromRGB(220, 70, 70)
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 16
+closeButton.Font = Enum.Font.GothamBold
+closeButton.BorderSizePixel = 0
+closeButton.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeButton
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(1, -30, 0, 40)
+toggleButton.Position = UDim2.new(0, 15, 0, 50)
+toggleButton.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
+toggleButton.Text = "▶ Start Auto Fish"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextSize = 16
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.BorderSizePixel = 0
+toggleButton.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 8)
+toggleCorner.Parent = toggleButton
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(1, -30, 0, 50)
+statusLabel.Position = UDim2.new(0, 15, 1, -60)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Status: Idle 💤\nTimeout: 10s per stage"
+statusLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+statusLabel.TextSize = 13
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.TextYAlignment = Enum.TextYAlignment.Top
+statusLabel.Parent = mainFrame
+
+-- ============================================
+-- 🔧 الدوال الأساسية
+-- ============================================
+
+local isRunning = false
+
+-- دالة لإرسال الأوامر للسيرفر
+local function sendAction(actionData)
+    local success, err = pcall(function()
+        local fishingRemote = ReplicatedStorage:FindFirstChild("Fishing")
+        if fishingRemote then
+            local remotes = fishingRemote:FindFirstChild("Remotes")
+            if remotes then
+                local actionRemote = remotes:FindFirstChild("Action")
+                if actionRemote then
+                    actionRemote:InvokeServer(actionData)
+                end
+            end
+        end
+    end)
+    if not success then
+        warn("⚠️ خطأ في إرسال الأمر: " .. tostring(err))
+    end
+end
+
+-- دالة تحديث الحالة
+local function updateStatus(text, color)
+    statusLabel.Text = "Status: " .. text
+    statusLabel.TextColor3 = color or Color3.fromRGB(180, 180, 200)
+end
+
+-- ============================================
+-- 🎣 حلقة الصيد الرئيسية (مع Timeout + Cancel)
+-- ============================================
+
+local function fishingLoop()
+    while isRunning do
+        -- 1️⃣ رمي الصنارة
+        updateStatus("Throwing 🎣", Color3.fromRGB(100, 200, 255))
+        sendAction({
+            ["Bait"] = BAIT_NAME,
+            ["Action"] = "Throw",
+            ["Goal"] = FISHING_GOAL
+        })
+        if not isRunning then break end
+        
+        -- ⏱️ ينتظر THROW_TIMEOUT ثواني
+        updateStatus("Waiting after throw... ⏱️ (" .. THROW_TIMEOUT .. "s)", Color3.fromRGB(150, 150, 200))
+        task.wait(THROW_TIMEOUT)
+        if not isRunning then break end
+
+        -- 2️⃣ السمكة علقت
+        updateStatus("Fish Landed! 🐟", Color3.fromRGB(255, 200, 100))
+        sendAction({["Action"] = "Landed"})
+        if not isRunning then break end
+        
+        -- ⏱️ ينتظر LAND_TIMEOUT ثواني
+        updateStatus("Waiting after land... ⏱️ (" .. LAND_TIMEOUT .. "s)", Color3.fromRGB(150, 150, 200))
+        task.wait(LAND_TIMEOUT)
+        if not isRunning then break end
+
+        -- 3️⃣ سحب السمكة
+        updateStatus("Reeling... 🎣", Color3.fromRGB(100, 255, 150))
+        sendAction({["Action"] = "Reel"})
+        if not isRunning then break end
+        
+        -- ⏱️ ينتظر REEL_TIMEOUT ثواني
+        updateStatus("Waiting after reel... ⏱️ (" .. REEL_TIMEOUT .. "s)", Color3.fromRGB(150, 150, 200))
+        task.wait(REEL_TIMEOUT)
+        if not isRunning then break end
+
+        -- 4️⃣ إرجاع الخطاف
+        updateStatus("Returning Hook ↩️", Color3.fromRGB(200, 150, 255))
+        sendAction({["Action"] = "HookReturning"})
+        if not isRunning then break end
+        
+        -- ⏱️ ينتظر RETURN_TIMEOUT ثواني
+        updateStatus("Waiting after return... ⏱️ (" .. RETURN_TIMEOUT .. "s)", Color3.fromRGB(150, 150, 200))
+        task.wait(RETURN_TIMEOUT)
+        if not isRunning then break end
+
+        -- 5️⃣ إلغاء الصيد (قبل الدورة الجديدة)
+        updateStatus("Canceling... ❌", Color3.fromRGB(255, 150, 100))
+        sendAction({["Action"] = "Cancel"})
+        if not isRunning then break end
+        
+        -- ⏱️ تأخير بعد Cancel قبل الدورة الجديدة
+        updateStatus("Waiting for next cycle... ⏱️ (" .. CANCEL_DELAY .. "s)", Color3.fromRGB(150, 150, 200))
+        task.wait(CANCEL_DELAY)
+        if not isRunning then break end
+    end
+    updateStatus("Stopped ⏹️", Color3.fromRGB(220, 100, 100))
+end
+
+-- ============================================
+-- 🎮 أحداث الأزرار
+-- ============================================
+
+closeButton.MouseButton1Click:Connect(function()
+    isRunning = false
+    screenGui:Destroy()
+end)
+
+toggleButton.MouseButton1Click:Connect(function()
+    isRunning = not isRunning
+    
+    if isRunning then
+        toggleButton.Text = "⏸ Stop Auto Fish"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(220, 70, 70)
+        updateStatus("Starting... 🚀", Color3.fromRGB(100, 255, 150))
+        task.spawn(fishingLoop)
+    else
+        toggleButton.Text = "▶ Start Auto Fish"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
+        updateStatus("Idle 💤", Color3.fromRGB(180, 180, 200))
+    end
+end)
+
+-- تأثيرات hover
+closeButton.MouseEnter:Connect(function()
+    closeButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+end)
+closeButton.MouseLeave:Connect(function()
+    closeButton.BackgroundColor3 = Color3.fromRGB(220, 70, 70)
+end)
+
+toggleButton.MouseEnter:Connect(function()
+    if isRunning then
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+    else
+        toggleButton.BackgroundColor3 = Color3.fromRGB(100, 230, 130)
+    end
+end)
+toggleButton.MouseLeave:Connect(function()
+    if isRunning then
+        toggleButton.BackgroundColor3 = Color3.fromRGB(220, 70, 70)
+    else
+        toggleButton.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
+    end
+end)
+
+print("✅ تم تحميل Auto Fish GUI (Timeout + Cancel) بنجاح!")
+print("⏱️ كل مرحلة تنتظر 10 ثواني، ثم Cancel قبل الدورة الجديدة")
