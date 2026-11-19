@@ -2,11 +2,39 @@ package com.mangatranslator.features.reader
 
 import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.outlined.Compare
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material.icons.outlined.ViewColumn
+import androidx.compose.material.icons.outlined.ZoomOutMap
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Slider
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import com.mangatranslator.core.designsystem.rememberReducedMotion
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,9 +56,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -148,16 +173,30 @@ class ReaderViewModel @Inject constructor(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, FlowPreview::class)
 @Composable
 fun ReaderScreen(nav: NavController, vm: ReaderViewModel = hiltViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
-    var mode by remember { mutableStateOf(if (settings.showOriginalText) ViewMode.Compare else ViewMode.Translated) }
+    var mode by rememberSaveable { mutableStateOf(if (settings.showOriginalText) ViewMode.Compare else ViewMode.Translated) }
+    var overlayAlpha by rememberSaveable { mutableFloatStateOf(0.5f) }
     var editMode by remember { mutableStateOf(false) }
     var controls by remember { mutableStateOf(true) }
     var editing by remember { mutableStateOf<SegmentRow?>(null) }
+    // One zoom/pan state for the whole reader: in side-by-side both copies move together.
     var scale by remember { mutableFloatStateOf(1f) }
+    var pan by remember { mutableStateOf(Offset.Zero) }
     val fontFamily = PageFonts.byId(settings.arabicFont)
+    val reducedMotion = rememberReducedMotion()
+    val scope = rememberCoroutineScope()
+    val vertical = settings.readingDirection == "vertical"
+    val list = rememberLazyListState()
+    val pager = rememberPagerState { vm.pages.size }
+    val currentPage by remember(vertical) { derivedStateOf { if (vertical) list.firstVisibleItemIndex else pager.currentPage } }
+    fun resetZoom() { scale = 1f; pan = Offset.Zero }
+    fun goTo(index: Int) {
+        val i = index.coerceIn(0, (vm.pages.size - 1).coerceAtLeast(0))
+        scope.launch { if (vertical) list.scrollToItem(i) else if (reducedMotion) pager.scrollToPage(i) else pager.animateScrollToPage(i) }
+    }
 
     FullscreenAndBrightness(enabled = settings.readerFullscreen && !controls, brightness = settings.readerBrightness)
 
@@ -166,40 +205,83 @@ fun ReaderScreen(nav: NavController, vm: ReaderViewModel = hiltViewModel()) {
             vm.error != null && vm.pages.isEmpty() -> ErrorState(vm.error!!, onRetry = { vm.load() })
             vm.pages.isEmpty() -> LoadingState()
             else -> {
-                val zoom = rememberTransformableState { z, _, _ -> scale = (scale * z).coerceIn(1f, 3f) }
+                val zoom = rememberTransformableState { z, p, _ ->
+                    scale = (scale * z).coerceIn(1f, 4f)
+                    pan = if (scale <= 1f) Offset.Zero else pan + p
+                }
                 val content = Modifier
                     .fillMaxSize()
-                    .transformable(zoom)
-                    .graphicsLayer { scaleX = scale; scaleY = scale }
-                val tap = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { controls = !controls }
+                    // Pan only once zoomed, so swiping between pages still works at 1x.
+                    .transformable(zoom, canPan = { scale > 1f })
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { controls = !controls },
+                            onDoubleTap = { if (scale > 1f) resetZoom() else scale = 2f },
+                        )
+                    }
+                    .graphicsLayer {
+                        scaleX = scale; scaleY = scale
+                        val maxX = size.width * (scale - 1f) / 2f
+                        val maxY = size.height * (scale - 1f) / 2f
+                        translationX = pan.x.coerceIn(-maxX, maxX)
+                        translationY = pan.y.coerceIn(-maxY, maxY)
+                    }
 
-                if (settings.readingDirection == "vertical") {
-                    val list = rememberLazyListState()
-                    LaunchedEffect(list) { snapshotFlow { list.firstVisibleItemIndex }.debounce(1500).collect { vm.recordPage(it) } }
-                    LazyColumn(content.then(tap), state = list) {
-                        itemsIndexed(vm.pages, key = { _, p -> p.id }) { _, p ->
-                            TranslatedPage(p, vm.imageUrl(p), vm.segments[p.id].orEmpty(), mode, fontFamily, settings.fontScale, editMode, { editing = it }, decodeWidth = decodeWidthFor(settings.imageQuality))
+                val page: @Composable (Int) -> Unit = { i ->
+                    val p = vm.pages[i]
+                    val segs = vm.segments[p.id].orEmpty()
+                    val width = decodeWidthFor(settings.imageQuality)
+                    if (mode == ViewMode.SideBySide) {
+                        // Half-width copies: decode at half size so memory stays the same as one page.
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            TranslatedPage(p, vm.imageUrl(p), segs, ViewMode.Original, fontFamily, settings.fontScale, false, {}, Modifier.weight(1f), decodeWidth = width / 2)
+                            Spacer(Modifier.width(2.dp))
+                            TranslatedPage(p, vm.imageUrl(p), segs, ViewMode.Translated, fontFamily, settings.fontScale, editMode, { editing = it }, Modifier.weight(1f), decodeWidth = width / 2)
                         }
+                    } else {
+                        TranslatedPage(p, vm.imageUrl(p), segs, mode, fontFamily, settings.fontScale, editMode, { editing = it }, decodeWidth = width, overlayAlpha = overlayAlpha)
+                    }
+                }
+
+                if (vertical) {
+                    LaunchedEffect(list) { snapshotFlow { list.firstVisibleItemIndex }.debounce(1500).collect { vm.recordPage(it) } }
+                    LazyColumn(content, state = list, userScrollEnabled = scale <= 1f) {
+                        itemsIndexed(vm.pages, key = { _, p -> p.id }) { i, _ -> page(i) }
                     }
                 } else {
-                    val pager = rememberPagerState { vm.pages.size }
                     LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.debounce(1500).collect { vm.recordPage(it) } }
+                    LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { resetZoom() } }
                     HorizontalPager(
                         state = pager,
-                        modifier = content.then(tap),
+                        modifier = content,
                         reverseLayout = settings.readingDirection == "rtl",
                         verticalAlignment = Alignment.CenterVertically,
-                    ) { i ->
-                        val p = vm.pages[i]
-                        TranslatedPage(p, vm.imageUrl(p), vm.segments[p.id].orEmpty(), mode, fontFamily, settings.fontScale, editMode, { editing = it }, decodeWidth = decodeWidthFor(settings.imageQuality))
-                    }
+                        userScrollEnabled = scale <= 1f,
+                        beyondViewportPageCount = 1,
+                    ) { i -> page(i) }
                 }
             }
         }
 
-        AnimatedVisibility(controls, modifier = Modifier.align(Alignment.TopCenter)) {
+        AnimatedVisibility(
+            controls,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = if (reducedMotion) EnterTransition.None else fadeIn() + slideInVertically { -it / 2 },
+            exit = if (reducedMotion) ExitTransition.None else fadeOut() + slideOutVertically { -it / 2 },
+        ) {
             Column(Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f))) {
                 MtTopBar(vm.job?.chapterTitle ?: "", onBack = { nav.popBackStack() }) {
+                    if (scale > 1f) {
+                        IconButton(onClick = ::resetZoom) { Icon(Icons.Outlined.ZoomOutMap, stringResource(R.string.reader_reset_zoom)) }
+                    }
+                    // Quick toggle between the original and the translation.
+                    IconButton(onClick = { mode = if (mode == ViewMode.Original) ViewMode.Translated else ViewMode.Original }) {
+                        Icon(
+                            Icons.Outlined.Translate,
+                            stringResource(if (mode == ViewMode.Original) R.string.reader_show_translated else R.string.reader_show_original),
+                            tint = if (mode == ViewMode.Original) MtTheme.colors.textSecondary else MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     IconButton(onClick = { editMode = !editMode }) {
                         Icon(Icons.Outlined.Edit, stringResource(R.string.reader_edit_mode), tint = if (editMode) MaterialTheme.colorScheme.primary else MtTheme.colors.textSecondary)
                     }
@@ -214,17 +296,21 @@ fun ReaderScreen(nav: NavController, vm: ReaderViewModel = hiltViewModel()) {
                 }
             }
         }
-        AnimatedVisibility(controls, modifier = Modifier.align(Alignment.BottomCenter)) {
-            SingleChoiceSegmentedButtonRow(
-                Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f)).padding(Spacing.md),
-            ) {
-                val options = listOf(ViewMode.Original to R.string.reader_original, ViewMode.Compare to R.string.reader_compare, ViewMode.Translated to R.string.reader_translated)
-                options.forEachIndexed { i, (m, label) ->
-                    SegmentedButton(selected = mode == m, onClick = { mode = m }, shape = SegmentedButtonDefaults.itemShape(i, options.size)) {
-                        Text(stringResource(label))
-                    }
-                }
-            }
+        AnimatedVisibility(
+            controls && vm.pages.isNotEmpty(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = if (reducedMotion) EnterTransition.None else fadeIn() + slideInVertically { it / 2 },
+            exit = if (reducedMotion) ExitTransition.None else fadeOut() + slideOutVertically { it / 2 },
+        ) {
+            ReaderControls(
+                mode = mode,
+                onMode = { mode = it },
+                overlayAlpha = overlayAlpha,
+                onOverlayAlpha = { overlayAlpha = it },
+                page = currentPage,
+                pageCount = vm.pages.size,
+                onGoTo = ::goTo,
+            )
         }
     }
 
@@ -299,6 +385,72 @@ private fun SegmentEditorSheet(seg: SegmentRow, vm: ReaderViewModel, onDismiss: 
                 }
             }, variant = ButtonVariant.Ghost, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(Spacing.lg))
+        }
+    }
+}
+
+/** Bottom panel: page progress + jump, comparison modes, overlay opacity. */
+@Composable
+private fun ReaderControls(
+    mode: ViewMode,
+    onMode: (ViewMode) -> Unit,
+    overlayAlpha: Float,
+    onOverlayAlpha: (Float) -> Unit,
+    page: Int,
+    pageCount: Int,
+    onGoTo: (Int) -> Unit,
+) {
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    val jumpLabel = stringResource(R.string.reader_jump_to_page)
+    Column(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
+            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        if (pageCount > 1) {
+            val shown = ((dragging ?: page.toFloat()).roundToInt() + 1).coerceIn(1, pageCount)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.reader_page_of, shown, pageCount),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.width(64.dp),
+                )
+                Slider(
+                    value = dragging ?: page.toFloat(),
+                    onValueChange = { dragging = it },
+                    onValueChangeFinished = { dragging?.let { onGoTo(it.roundToInt()) }; dragging = null },
+                    valueRange = 0f..(pageCount - 1).toFloat(),
+                    steps = (pageCount - 2).coerceIn(0, 200),
+                    modifier = Modifier.weight(1f).semantics { contentDescription = jumpLabel },
+                )
+                Text("${(shown * 100 / pageCount)}%", style = MaterialTheme.typography.labelSmall, color = MtTheme.colors.textSecondary, modifier = Modifier.padding(start = Spacing.xs))
+            }
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            listOf(
+                Triple(ViewMode.Translated, R.string.reader_translated, Icons.Outlined.Translate),
+                Triple(ViewMode.Original, R.string.reader_original, Icons.Outlined.Image),
+                Triple(ViewMode.Compare, R.string.reader_compare, Icons.Outlined.Compare),
+                Triple(ViewMode.SideBySide, R.string.reader_side_by_side, Icons.Outlined.ViewColumn),
+                Triple(ViewMode.Overlay, R.string.reader_overlay, Icons.Outlined.Layers),
+            ).forEach { (m, label, icon) ->
+                FilterChip(
+                    selected = mode == m,
+                    onClick = { onMode(m) },
+                    label = { Text(stringResource(label)) },
+                    leadingIcon = { Icon(icon, null, Modifier.size(18.dp)) },
+                    modifier = Modifier.heightIn(min = 40.dp),
+                )
+            }
+        }
+        if (mode == ViewMode.Overlay) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.reader_overlay_opacity), style = MaterialTheme.typography.labelMedium)
+                Slider(overlayAlpha, onOverlayAlpha, valueRange = 0f..1f, modifier = Modifier.weight(1f).padding(start = Spacing.sm))
+            }
+        }
+        if (mode == ViewMode.Compare) {
+            Text(stringResource(R.string.reader_compare_hint), style = MaterialTheme.typography.labelSmall, color = MtTheme.colors.textSecondary)
         }
     }
 }

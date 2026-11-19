@@ -16,7 +16,16 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.mangatranslator.R
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -57,7 +66,11 @@ import com.mangatranslator.core.theme.MtColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-enum class ViewMode { Translated, Original, Compare }
+/**
+ * Translated / Original, Compare (swipe reveal), SideBySide (the reader shows two
+ * copies) and Overlay (translation drawn with adjustable opacity).
+ */
+enum class ViewMode { Translated, Original, Compare, SideBySide, Overlay }
 
 /**
  * Arabic Text Rendering engine (on-device). The original image is never
@@ -80,6 +93,7 @@ fun TranslatedPage(
     onSegmentClick: (SegmentRow) -> Unit,
     modifier: Modifier = Modifier,
     decodeWidth: Int = 1080,
+    overlayAlpha: Float = 1f,
 ) {
     val context = LocalContext.current
     var bitmap by remember(imageUrl, decodeWidth) { mutableStateOf<Bitmap?>(null) }
@@ -104,6 +118,7 @@ fun TranslatedPage(
         bitmap?.let { bmp -> segments.associate { it.id to dominantColor(bmp, it) } } ?: emptyMap()
     }
     var split by remember { mutableFloatStateOf(0.5f) }
+    val handleLabel = stringResource(R.string.reader_compare_handle)
 
     BoxWithConstraints(modifier.fillMaxWidth().aspectRatio(ratio.coerceIn(0.05f, 5f)).clipToBounds()) {
         val wPx = constraints.maxWidth.toFloat()
@@ -120,6 +135,7 @@ fun TranslatedPage(
             Box(
                 Modifier
                     .fillMaxSize()
+                    .then(if (mode == ViewMode.Overlay) Modifier.graphicsLayer { alpha = overlayAlpha } else Modifier)
                     .then(
                         if (mode == ViewMode.Compare) {
                             Modifier
@@ -178,7 +194,20 @@ fun TranslatedPage(
 
         if (mode == ViewMode.Compare) {
             with(density) {
-                Box(Modifier.offset((split * wPx).toDp() - 1.dp, 0.dp).width(2.dp).fillMaxSize().background(MtColors.Purple))
+                val x = (split * wPx).toDp()
+                Box(Modifier.offset(x - 1.dp, 0.dp).width(2.dp).fillMaxSize().background(MtColors.Purple))
+                // Handle: a big round target so the divider is easy to grab with one thumb.
+                Box(
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .offset(x - 18.dp, 0.dp)
+                        .size(36.dp)
+                        .background(MtColors.Purple, CircleShape)
+                        .semantics { contentDescription = handleLabel },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.SwapHoriz, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
             }
         }
     }
