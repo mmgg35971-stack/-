@@ -1,6 +1,7 @@
 # secrets
 backend/supabase/.env
 *.keystore
+!android/app/debug.keystore
 *.jks
 keystore.properties
 local.properties
