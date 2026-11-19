@@ -98,7 +98,7 @@ private fun priorityText(p: Int) = stringResource(
 )
 
 @Composable
-private fun qualityText(levels: List<String>) = levels.joinToString(" · ") {
+private fun qualityText(levels: List<String>) = levels.map {
     stringResource(
         when (it) {
             "best" -> R.string.quality_best
@@ -106,7 +106,7 @@ private fun qualityText(levels: List<String>) = levels.joinToString(" · ") {
             else -> R.string.quality_standard
         },
     )
-}
+}.joinToString(" · ")
 
 @Composable
 fun SubscriptionScreen(nav: NavController, vm: SubscriptionViewModel = hiltViewModel()) {

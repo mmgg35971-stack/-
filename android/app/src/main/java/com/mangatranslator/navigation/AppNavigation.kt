@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -116,7 +117,7 @@ fun AppRoot(vm: RootViewModel = hiltViewModel()) {
 }
 
 /** Switch tabs keeping each tab's own back stack and scroll state. */
-fun NavHostController.switchTab(route: String) = navigate(route) {
+fun NavController.switchTab(route: String) = navigate(route) {
     popUpTo(graph.findStartDestination().id) { saveState = true }
     launchSingleTop = true
     restoreState = true
