@@ -43,11 +43,19 @@
 الأسرار الداخلية (`GIFT_CODE_PEPPER` و`ADMIN_SECRET_PEPPER` و`WORKER_SECRET`) تُنشأ على الخادم مرة واحدة ولا تُغيَّر.
 مفاتيح `service_role` وكلمات المرور لا تُرسل لأي شخص ولا توضع في التطبيق.
 
-## 2. تسجيل الدخول بـ Google
+## 2. تسجيل الدخول
+
+**البريد وكلمة المرور (الأساسي):** يعمل مباشرة. في Supabase: Authentication ← Sign In / Providers ← Email،
+أوقف **Confirm email** حتى لا يحتاج المستخدم رسالة تأكيد (بريد Supabase المجاني محدود جداً بعدد الرسائل في الساعة).
+فعّله لاحقاً بعد ضبط SMTP خاص بك (Authentication ← Emails ← SMTP Settings).
+
+### Google (اختياري)
+
+زر Google يظهر فقط إذا بُني التطبيق مع `GOOGLE_WEB_CLIENT_ID`.
 
 1. في Google Cloud Console أنشئ OAuth Client من نوع **Web application**. هذا هو `GOOGLE_WEB_CLIENT_ID`.
 2. أنشئ أيضاً OAuth Client من نوع **Android** باسم الحزمة `com.mangatranslator.app`
-   (و`com.mangatranslator.app.debug` للنسخة التجريبية) وبصمة SHA-1 لمفتاح التوقيع.
+   (و`com.mangatranslator.app.debug` للنسخة التجريبية، وبصمتها `97:74:EE:CD:DA:68:71:1E:4C:EE:78:87:99:4D:60:F1:39:EF:35:B4`) وبصمة SHA-1 لمفتاح التوقيع.
 3. في Supabase: Authentication → Providers → Google، فعّله وضع Web client ID والسر.
    (أو `GOOGLE_WEB_CLIENT_ID` و`GOOGLE_WEB_CLIENT_SECRET` في البيئة إذا استخدمت `config.toml`.)
 

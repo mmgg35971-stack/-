@@ -31,7 +31,7 @@
     <string name="error_uploads_incomplete">لم يكتمل رفع كل الصفحات بعد.</string>
     <string name="error_account_inactive">الحساب غير نشط.</string>
     <string name="config_missing_title">التطبيق غير مربوط بالخادم</string>
-    <string name="config_missing_body">هذه النسخة بُنيت بدون SUPABASE_URL و SUPABASE_ANON_KEY و GOOGLE_WEB_CLIENT_ID. راجع docs/setup/SETUP.md ثم أعد البناء.</string>
+    <string name="config_missing_body">هذه النسخة بُنيت بدون SUPABASE_URL و SUPABASE_ANON_KEY. راجع docs/setup/SETUP.md ثم أعد البناء.</string>
     <string name="signin_title">ترجم فصولك المفضلة إلى العربية</string>
     <string name="signin_subtitle">مانجا، مانهوا، مانها وويب تون بترجمة طبيعية تحافظ على روح الحوار.</string>
     <string name="signin_google">المتابعة باستخدام Google</string>
@@ -331,4 +331,20 @@
     <string name="admin_cfg_cost_limit">حد التكلفة اليومي بالدولار</string>
     <string name="admin_cfg_max_pages">حجم الفصل</string>
     <string name="admin_cfg_max_pages_value">أقصى عدد صفحات للفصل</string>
+    <string name="signin_email">البريد الإلكتروني</string>
+    <string name="signin_password">كلمة المرور</string>
+    <string name="signin_name">اسمك</string>
+    <string name="signin_password_rule">8 أحرف على الأقل.</string>
+    <string name="signin_submit">تسجيل الدخول</string>
+    <string name="signin_create">إنشاء حساب</string>
+    <string name="signin_no_account">ليس لديك حساب؟ أنشئ حساباً</string>
+    <string name="signin_have_account">لديك حساب؟ سجّل الدخول</string>
+    <string name="signin_confirm_sent">أرسلنا رسالة تأكيد إلى %1$s. افتح الرابط فيها ثم سجّل الدخول.</string>
+    <string name="signin_invalid_credentials">البريد أو كلمة المرور غير صحيحة.</string>
+    <string name="signin_email_not_confirmed">لم تؤكد بريدك بعد. افتح رسالة التأكيد ثم حاول مجدداً.</string>
+    <string name="signin_user_exists">هذا البريد مسجّل مسبقاً. سجّل الدخول بدلاً من ذلك.</string>
+    <string name="signin_weak_password">كلمة المرور ضعيفة. استخدم 8 أحرف على الأقل مع أرقام.</string>
+    <string name="signin_invalid_email">تحقق من البريد الإلكتروني.</string>
+    <string name="signin_email_rate_limited">أُرسل عدد كبير من الرسائل. انتظر قليلاً ثم حاول.</string>
+    <string name="signin_signup_disabled">إنشاء الحسابات بالبريد غير مفعّل على الخادم.</string>
 </resources>

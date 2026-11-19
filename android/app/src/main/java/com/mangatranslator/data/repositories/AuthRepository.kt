@@ -21,7 +21,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Official Google sign-in through Credential Manager. Google returns an ID
+ * Email + password accounts (Supabase Auth), and optional official Google
+ * sign-in through Credential Manager. Google returns an ID
  * token bound to a nonce; Supabase verifies that token server-side and issues
  * our session. We never see or store a Google password.
  */
@@ -58,6 +59,12 @@ class AuthRepository @Inject constructor(
         val google = GoogleIdTokenCredential.createFrom(credential.data)
         return auth.signInWithGoogleIdToken(google.idToken, rawNonce)
     }
+
+    suspend fun signInWithEmail(email: String, password: String): Session = auth.signInWithPassword(email.trim(), password)
+
+    /** Null when Supabase requires the user to confirm their email first. */
+    suspend fun signUpWithEmail(email: String, password: String, name: String): Session? =
+        auth.signUpWithPassword(email.trim(), password, name.trim().take(60))
 
     suspend fun signOut() = auth.signOut()
 }

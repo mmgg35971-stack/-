@@ -61,6 +61,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -147,6 +149,7 @@ fun MtTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     placeholder: String? = null,
     minLines: Int = 1,
+    isPassword: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
@@ -160,6 +163,7 @@ fun MtTextField(
         isError = error != null,
         supportingText = error?.let { { Text(it) } },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         shape = RoundedCornerShape(Radii.md),
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedBorderColor = MtTheme.colors.border,
