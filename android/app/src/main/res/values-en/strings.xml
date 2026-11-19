@@ -351,7 +351,7 @@
     <string name="library_type_all">All types</string>
     <string name="action_edit">Edit</string>
     <string name="error_duplicate">This term is already in the glossary.</string>
-    <string name="memory_title">Story memory & glossary</string>
+    <string name="memory_title">Story memory &amp; glossary</string>
     <string name="memory_entry_hint">Summary, characters and terms that keep the translation consistent</string>
     <string name="memory_tab_memory">Memory</string>
     <string name="memory_tab_glossary">Glossary</string>
