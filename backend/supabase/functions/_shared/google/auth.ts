@@ -1,6 +1,6 @@
 // Google service-account OAuth (JWT bearer grant, RS256 via WebCrypto).
 // Used for the Play Developer API and FCM HTTP v1. No SDK needed.
-import { encodeBase64Url } from "@std/encoding/base64url";
+import { encodeBase64Url } from "jsr:@std/encoding@1.0.10/base64url";
 import { AppError } from "../http.ts";
 
 export interface ServiceAccount {

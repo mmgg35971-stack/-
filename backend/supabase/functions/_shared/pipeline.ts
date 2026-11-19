@@ -5,7 +5,7 @@
 // Rendering of Arabic onto the image happens on the device (Android text
 // engine handles Arabic shaping/RTL natively) using the stored boxes and
 // translations; originals are never modified.
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.119.0";
 import { ocrProvider, translationProvider } from "./providers.ts";
 import { OcrError, REVIEW_CONFIDENCE, sortReadingOrder } from "./ocr/types.ts";
 import { type SourceSegment, TranslationError, type TranslationRequest } from "./translation/types.ts";

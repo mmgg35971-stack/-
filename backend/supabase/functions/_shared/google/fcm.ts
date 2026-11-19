@@ -1,7 +1,7 @@
 // Push notifications through FCM HTTP v1. Optional: when no Firebase
 // service account is configured, push is skipped and the in-app
 // notification list still works.
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2.119.0";
 import { accessToken, parseServiceAccount } from "./auth.ts";
 
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
