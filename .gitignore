@@ -1,0 +1,13 @@
+# secrets
+backend/supabase/.env
+*.keystore
+*.jks
+keystore.properties
+local.properties
+# build
+.gradle/
+build/
+android/app/build/
+.idea/
+*.iml
+.DS_Store

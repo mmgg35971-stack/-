@@ -1,0 +1,32 @@
+# Supabase CLI project config (used by `supabase start` / `supabase functions deploy`)
+project_id = "manga-translator"
+
+[api]
+port = 54321
+schemas = ["public"]
+max_rows = 200
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+site_url = "mangatranslator://auth"
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+
+# Google sign-in on Android sends a Google ID token to
+# /auth/v1/token?grant_type=id_token — configure the Web client ID here
+# (see docs/setup/SETUP.md). Secrets come from env, never from this file.
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_WEB_CLIENT_ID)"
+secret = "env(GOOGLE_WEB_CLIENT_SECRET)"
+skip_nonce_check = false
+
+[storage]
+file_size_limit = "15MiB"
+
+# Functions called by the app verify the user JWT themselves (requireUser).
+[functions.jobs-worker]
+verify_jwt = false
