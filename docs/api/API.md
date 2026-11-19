@@ -15,6 +15,10 @@
 | `admin-activate` | `{code}` | `{ok}` |
 | `admin` | `{action, ...}` | انظر أدناه |
 | `account-delete` | `{confirm: "DELETE"}` | `{ok}` |
+| `billing-verify` | `{product_id, purchase_token}` | `{ok, plan_id, status, expires_at}`. يسأل Google عن الحالة الحقيقية، ويرفض رمزاً اشتراه حساب آخر، ثم يمنح الخطة ويؤكد الشراء. |
+| `billing-rtdn` | رسالة Pub/Sub push، مع `?secret=PLAY_RTDN_SECRET` وبدون JWT | `{ok}`. تجديد أو إلغاء أو استرداد أو انتهاء، يُعاد التحقق من Google في كل مرة. |
+| `devices-register` | `{token, app_language?}` أو `{token, remove: true}` | `{ok}`. رمز FCM للجهاز (10 أجهزة كحد أقصى). |
+| `segments-retranslate` | `{segment_id, hint?, replace_edit?}` | `{ok, segment_id, translated_text}`. لا يحتسب فصلاً، والحد 60 في الساعة. تعديل المستخدم يبقى ما لم يكن `replace_edit: true`. |
 
 ### إجراءات `admin`
 
@@ -27,6 +31,11 @@
 | `gift_codes_list` | `plan?, status?, limit, offset` | `{codes, total}` (التلميح فقط، مع من استخدم الكود) |
 | `gift_code_revoke` | `code_id` | `{ok}` |
 | `audit_logs` | `limit, offset` | `{logs}` |
+| `subscription_grant` | `user_id, plan (pro/premium), days (1..3650), note?` | `{ok, expires_at}`. يُضاف إلى خطة نشطة من نفس المستوى. |
+| `subscription_revoke` | `subscription_id, note?` | `{ok}` |
+| `config_get` | — | `{config}` للمفاتيح `fair_use` و`ai_cost_alerts` و`max_pages_per_chapter` |
+| `config_update` | `key, value` | `{ok}`. القيم تُتحقق على الخادم وتُسجّل القيمة القديمة والجديدة. |
+| `ai_cost_daily` | `days? (1..90، الافتراضي 14)` | `{days:[{day, cost_usd, requests, failed}]}` |
 
 ## رموز الأخطاء
 
@@ -45,7 +54,11 @@
 | `rate_limited` | 429 | محاولات كثيرة |
 | `invalid_code` / `code_already_used` / `code_expired` / `code_revoked` / `higher_plan_active` | 400 / 409 | أكواد الهدايا |
 | `provider_not_configured` / `server_not_configured` | 503 | مفاتيح OCR أو الترجمة أو الأسرار غير مضبوطة على الخادم |
-| `job_not_found` / `page_not_found` / `user_not_found` / `work_not_found` | 404 | غير موجود |
+| `job_not_found` / `page_not_found` / `user_not_found` / `work_not_found` / `segment_not_found` | 404 | غير موجود |
+| `billing_not_configured` | 503 | حساب خدمة Google Play غير مضبوط على الخادم |
+| `purchase_owned_by_other` | 403 | رمز الشراء يخص حساباً آخر |
+| `purchase_pending` / `invalid_purchase` / `unknown_product` | 400 / 409 | شراء معلّق أو غير صالح أو منتج غير مربوط بخطة |
+| `subscription_not_active` / `segment_empty` | 409 | لا يوجد اشتراك نشط للإلغاء / لا نص أصلي |
 
 ## الوصول المباشر (PostgREST)
 

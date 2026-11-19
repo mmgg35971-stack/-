@@ -24,6 +24,25 @@
    بدون مفاتيح OCR والترجمة يعمل كل شيء آخر، و`jobs-start` يرفض بـ `provider_not_configured`
    **قبل** احتساب الفصل.
 
+### بديل بدون كمبيوتر: النشر من GitHub
+
+ملف `.github/workflows/deploy-backend.yml` يطبّق الترحيلات وينشر الدوال ويضبط الأسرار.
+في GitHub: Settings → Secrets and variables → Actions → New repository secret، أضف:
+
+| السر | مطلوب | من أين |
+|---|---|---|
+| `SUPABASE_ACCESS_TOKEN` | نعم | supabase.com → Account → Access Tokens (يبدأ بـ `sbp_`) |
+| `SUPABASE_DB_PASSWORD` | نعم | كلمة مرور قاعدة البيانات التي اخترتها عند إنشاء المشروع |
+| `ANTHROPIC_API_KEY` | للترجمة | console.anthropic.com |
+| `GOOGLE_VISION_API_KEY` | لـ OCR | Google Cloud → Cloud Vision API → Credentials |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | للشراء | انظر القسم 6 |
+| `PLAY_RTDN_SECRET` | للشراء | نص عشوائي طويل تختاره أنت |
+| `FCM_SERVICE_ACCOUNT_JSON` | للإشعارات | انظر القسم 7 |
+
+ثم Actions → Deploy backend → Run workflow (ويعمل تلقائياً بعد كل دمج في `main`).
+الأسرار الداخلية (`GIFT_CODE_PEPPER` و`ADMIN_SECRET_PEPPER` و`WORKER_SECRET`) تُنشأ على الخادم مرة واحدة ولا تُغيَّر.
+مفاتيح `service_role` وكلمات المرور لا تُرسل لأي شخص ولا توضع في التطبيق.
+
 ## 2. تسجيل الدخول بـ Google
 
 1. في Google Cloud Console أنشئ OAuth Client من نوع **Web application**. هذا هو `GOOGLE_WEB_CLIENT_ID`.
@@ -85,7 +104,37 @@ keyPassword=...
 ```
 `./gradlew bundleRelease` ينتج AAB لـ Google Play.
 
-## 6. الاختبارات
+## 6. الشراء عبر Google Play
+
+1. Play Console → أنشئ التطبيق باسم الحزمة `com.mangatranslator.app` وارفع أول AAB موقّع إلى مسار **Internal testing**
+   (لا تظهر منتجات الاشتراك قبل رفع نسخة تحتوي مكتبة Billing).
+2. Monetize → Subscriptions: أنشئ اشتراكين بمعرّفين مثل `pro_monthly` و`premium_monthly`، ولكل منهما base plan شهري تجدد تلقائياً بالسعر الذي تريده.
+3. اربط المعرّفين بالخطط في SQL Editor:
+   ```sql
+   update public.subscription_plans set play_product_id = 'pro_monthly' where id = 'pro';
+   update public.subscription_plans set play_product_id = 'premium_monthly' where id = 'premium';
+   ```
+4. Google Cloud → IAM → Service Accounts: أنشئ حساب خدمة وحمّل مفتاح JSON. ثم Play Console → Users and permissions →
+   ادعُ بريد حساب الخدمة وامنحه "View financial data" و"Manage orders and subscriptions".
+   ضع محتوى ملف JSON كاملاً في السر `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`.
+5. الإشعارات الفورية (RTDN): في Google Cloud → Pub/Sub أنشئ topic، وامنح `google-play-developer-notifications@system.gserviceaccount.com` دور Publisher عليه،
+   ثم اشتراكاً من نوع **Push** إلى:
+   `https://<ref>.supabase.co/functions/v1/billing-rtdn?secret=<PLAY_RTDN_SECRET>`
+   وفي Play Console → Monetization setup ضع اسم الـ topic.
+6. أعد تشغيل Deploy backend. التطبيق يعرض الأسعار من Play مباشرة، والخادم يتحقق من كل عملية شراء ويمنح الخطة ويؤكدها.
+
+بدون هذه الخطوات يبقى زر الشراء معطّلاً مع شرح، وأكواد الهدايا تعمل.
+
+## 7. إشعارات الدفع (Firebase)
+
+1. console.firebase.google.com → أضف مشروعاً (يمكن اختيار نفس مشروع Google Cloud) → أضف تطبيق Android باسم الحزمة `com.mangatranslator.app`.
+2. من Project settings → General خذ القيم التالية وضعها أسراراً في GitHub (هي معرّفات عامة وليست أسراراً، لكن الأسرار أسهل للضبط من الهاتف):
+   `FIREBASE_APP_ID` (mobilesdk_app_id)، و`FIREBASE_API_KEY` (current_key)، و`FIREBASE_PROJECT_ID`، و`FIREBASE_SENDER_ID` (project_number).
+   وأضف `GOOGLE_WEB_CLIENT_ID` من القسم 2 بنفس الطريقة. بناء Android في GitHub يقرؤها تلقائياً.
+3. Project settings → Service accounts → Generate new private key، وضع محتوى الملف في السر `FCM_SERVICE_ACCOUNT_JSON`.
+4. أعد تشغيل Deploy backend. يصل إشعار عند انتهاء كل فصل، والضغط عليه يفتح الفصل.
+
+## 8. الاختبارات
 
 ```bash
 bash backend/scripts/test-db.sh         # يحتاج PostgreSQL 15+ محلياً أو DATABASE_URL

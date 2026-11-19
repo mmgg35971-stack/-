@@ -9,8 +9,10 @@ name: Deploy backend
 #   ANTHROPIC_API_KEY       optional  translation (console.anthropic.com)
 #   GOOGLE_VISION_API_KEY   optional  OCR (Google Cloud, Cloud Vision API)
 #   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON / FCM_SERVICE_ACCOUNT_JSON  optional (billing / push)
-# Internal secrets (GIFT_CODE_PEPPER, ADMIN_SECRET_PEPPER, WORKER_SECRET,
-# PLAY_RTDN_SECRET) are generated once on the server and never rotated by this job.
+#   PLAY_RTDN_SECRET        optional  a long random string you choose; it is also put in the
+#                                     Pub/Sub push URL (?secret=...), so you must know it
+# Internal secrets (GIFT_CODE_PEPPER, ADMIN_SECRET_PEPPER, WORKER_SECRET) are
+# generated once on the server and never rotated by this job.
 
 on:
   push:
@@ -62,12 +64,13 @@ jobs:
           GOOGLE_VISION_API_KEY: ${{ secrets.GOOGLE_VISION_API_KEY }}
           GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          PLAY_RTDN_SECRET: ${{ secrets.PLAY_RTDN_SECRET }}
         run: |
           set -euo pipefail
           existing="$(supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" -o json | jq -r '.[].name')"
           envfile="$(mktemp)"; trap 'rm -f "$envfile"' EXIT
           # Internal secrets: create once, never overwrite (rotating the pepper would break unused gift codes).
-          for name in GIFT_CODE_PEPPER ADMIN_SECRET_PEPPER WORKER_SECRET PLAY_RTDN_SECRET; do
+          for name in GIFT_CODE_PEPPER ADMIN_SECRET_PEPPER WORKER_SECRET; do
             if ! grep -qx "$name" <<<"$existing"; then
               echo "$name=$(openssl rand -hex 32)" >> "$envfile"; echo "generated $name"
             fi
@@ -77,7 +80,7 @@ jobs:
           echo "OCR_PROVIDER=google_vision" >> "$envfile"
           echo "GOOGLE_PLAY_PACKAGE_NAME=com.mangatranslator.app" >> "$envfile"
           # Provider keys: only set when present in GitHub, so a missing one never erases a value set elsewhere.
-          for name in ANTHROPIC_API_KEY GOOGLE_VISION_API_KEY GOOGLE_PLAY_SERVICE_ACCOUNT_JSON FCM_SERVICE_ACCOUNT_JSON; do
+          for name in ANTHROPIC_API_KEY GOOGLE_VISION_API_KEY GOOGLE_PLAY_SERVICE_ACCOUNT_JSON FCM_SERVICE_ACCOUNT_JSON PLAY_RTDN_SECRET; do
             value="${!name:-}"
             if [ -n "$value" ]; then
               printf '%s=%s\n' "$name" "$(tr -d '\n' <<<"$value")" >> "$envfile"; echo "set $name"

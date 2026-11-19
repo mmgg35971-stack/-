@@ -27,6 +27,7 @@
 | `ai_usage_events` | تكلفة كل طلب AI ونتيجته، لتنبيهات التكلفة | لا وصول |
 | `rate_limit_buckets` | عدادات حد المعدل | لا وصول |
 | `translation_reports` | بلاغات "ترجمة سيئة" | إضافة |
+| `device_tokens` | رموز FCM لكل جهاز (فريد على الرمز) | لا وصول |
 
 ## الدوال
 
@@ -46,6 +47,11 @@
 | `admin_overview_stats()` / `admin_search_users(q)` | إحصاءات حقيقية وبحث |
 | `expire_subscriptions()` | إنهاء الاشتراكات المنتهية (عبر pg_cron) |
 | `rate_limit_hit(key, window, max)` | حد معدل بنافذة ثابتة |
+| `apply_play_subscription(...)` / `revoke_play_subscription(hash, status)` | تطبيق حالة اشتراك Play (الرمز يُحفظ كـ SHA-256 فقط)، وإنهاء الرمز القديم عند الترقية، ورفض رمز يخص مستخدماً آخر |
+| `admin_grant_subscription` / `admin_revoke_subscription` | منح أو إلغاء اشتراك يدوياً، مع تسجيل |
+| `admin_update_config(actor, key, value)` | تعديل مفاتيح محددة فقط بعد التحقق من القيم، مع تسجيل القديم والجديد |
+| `admin_ai_cost_daily(actor, days)` | تكلفة AI والطلبات والفشل لكل يوم UTC |
+| `worker_set_segment_translation(seg, text, clear_edit)` | حفظ إعادة ترجمة مقطع واحد |
 
 ## Storage
 
@@ -57,5 +63,5 @@ bucket خاص `chapter-pages`. المسار `{uid}/{job}/original/NNNN.ext` (و�
 `backend/scripts/test-db.sh` يشغّل كل الترحيلات على Postgres مؤقت، ثم:
 `tests/10_business_rules.sql` (التسجيل، والحد المجاني، وidempotency، والاسترداد، وبوابات الخطط،
 وتفعيل المدير وRBAC، والأكواد، وتعارض الخطط، وانتهاء الاشتراك، وRLS والصلاحيات، ووصول anon)،
-ثم اختباري تزامن: 20 استخداماً متزامناً لكود واحد تعطي نجاحاً واحداً، و15 بدءاً متزامناً
+و`tests/20_billing_admin.sql` (اشتراكات Play والترقية ورفض رمز الغير، ومنح وإلغاء المدير، والإعدادات)، ثم اختباري تزامن: 20 استخداماً متزامناً لكود واحد تعطي نجاحاً واحداً، و15 بدءاً متزامناً
 على حساب Free تعطي 10 محتسبة بالضبط.
