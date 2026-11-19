@@ -56,6 +56,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.mangatranslator.R
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.foundation.layout.width
 import com.mangatranslator.core.common.AppException
 import com.mangatranslator.core.common.Formatters
 import com.mangatranslator.core.common.asAppException
@@ -111,6 +116,8 @@ class LibraryViewModel @Inject constructor(
     var query by mutableStateOf("")
     var sort by mutableStateOf(LibrarySort.Recent)
     var favoritesOnly by mutableStateOf(false)
+    var typeFilter by mutableStateOf<String?>(null)
+    var listView by mutableStateOf(false)
 
     init { load() }
 
@@ -130,6 +137,7 @@ class LibraryViewModel @Inject constructor(
     val visible: List<LibraryWork>
         get() = works
             .filter { !favoritesOnly || it.isFavorite }
+            .filter { typeFilter == null || it.contentType == typeFilter }
             .filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
             .let { list ->
                 when (sort) {
@@ -173,6 +181,12 @@ fun LibraryScreen(nav: NavController, vm: LibraryViewModel = hiltViewModel()) {
 
     Column(Modifier.fillMaxSize()) {
         MtTopBar(stringResource(R.string.library_title), actions = {
+            IconButton(onClick = { vm.listView = !vm.listView }) {
+                Icon(
+                    if (vm.listView) Icons.Outlined.GridView else Icons.AutoMirrored.Outlined.ViewList,
+                    stringResource(if (vm.listView) R.string.library_view_grid else R.string.library_view_list),
+                )
+            }
             IconButton(onClick = { showAdd = true }) { Icon(Icons.Outlined.Add, stringResource(R.string.library_add)) }
         })
         when {
@@ -180,7 +194,7 @@ fun LibraryScreen(nav: NavController, vm: LibraryViewModel = hiltViewModel()) {
             vm.error != null && vm.works.isEmpty() -> ErrorState(vm.error!!, onRetry = { vm.load() })
             else -> PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = { vm.load(pull = true) }) {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(150.dp),
+                    columns = if (vm.listView) GridCells.Fixed(1) else GridCells.Adaptive(150.dp),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(Spacing.screen),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.md),
@@ -189,10 +203,16 @@ fun LibraryScreen(nav: NavController, vm: LibraryViewModel = hiltViewModel()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             MtTextField(vm.query, { vm.query = it }, stringResource(R.string.action_search))
-                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                                 FilterChip(vm.sort == LibrarySort.Recent, { vm.sort = LibrarySort.Recent }, { Text(stringResource(R.string.library_sort_recent)) })
                                 FilterChip(vm.sort == LibrarySort.Title, { vm.sort = LibrarySort.Title }, { Text(stringResource(R.string.library_sort_title)) })
                                 FilterChip(vm.favoritesOnly, { vm.favoritesOnly = !vm.favoritesOnly }, { Text(stringResource(R.string.library_favorites)) })
+                            }
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                                FilterChip(vm.typeFilter == null, { vm.typeFilter = null }, { Text(stringResource(R.string.library_type_all)) })
+                                CONTENT_TYPES.forEach { t ->
+                                    FilterChip(vm.typeFilter == t, { vm.typeFilter = if (vm.typeFilter == t) null else t }, { Text(stringResource(contentTypeRes(t))) })
+                                }
                             }
                         }
                     }
@@ -205,7 +225,12 @@ fun LibraryScreen(nav: NavController, vm: LibraryViewModel = hiltViewModel()) {
                         }
                     } else {
                         items(list, key = { it.id }) { w ->
-                            WorkTile(
+                            if (vm.listView) WorkRow(
+                                w, vm.coverUrl(w.coverPath),
+                                onClick = { nav.navigate(Routes.work(w.id)) },
+                                onFavorite = { vm.toggleFavorite(w) { e -> scope.launch { snackbar.showSnackbar(ctx.getString(errorText(e))) } } },
+                                onDelete = { toDelete = w },
+                            ) else WorkTile(
                                 w, vm.coverUrl(w.coverPath),
                                 onClick = { nav.navigate(Routes.work(w.id)) },
                                 onFavorite = { vm.toggleFavorite(w) { e -> scope.launch { snackbar.showSnackbar(ctx.getString(errorText(e))) } } },
@@ -241,6 +266,43 @@ fun LibraryScreen(nav: NavController, vm: LibraryViewModel = hiltViewModel()) {
                 }
             },
         )
+    }
+}
+
+/** List layout: small cover on the start side, details beside it (mirrors correctly in RTL). */
+@Composable
+private fun WorkRow(w: LibraryWork, cover: String?, onClick: () -> Unit, onFavorite: () -> Unit, onDelete: () -> Unit) {
+    MtCard(onClick = onClick, contentPadding = PaddingValues(Spacing.sm)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(56.dp).aspectRatio(0.72f).background(MtTheme.colors.border, RoundedCornerShape(Radii.sm)).clip(RoundedCornerShape(Radii.sm))) {
+                if (cover != null) {
+                    AsyncImage(cover, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else {
+                    Icon(Icons.Outlined.ImageNotSupported, null, tint = MtTheme.colors.textSecondary, modifier = Modifier.align(Alignment.Center).size(20.dp))
+                }
+            }
+            Column(Modifier.weight(1f).padding(horizontal = Spacing.md)) {
+                Text(w.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    stringResource(contentTypeRes(w.contentType)) + " · " + stringResource(R.string.library_chapters, w.chapterCount),
+                    style = MaterialTheme.typography.bodySmall, color = MtTheme.colors.textSecondary,
+                )
+                Text(
+                    if (w.lastReadAt != null) stringResource(R.string.library_last_read, Formatters.date(w.lastReadAt)) else stringResource(R.string.library_never_read),
+                    style = MaterialTheme.typography.labelSmall, color = MtTheme.colors.textSecondary,
+                )
+            }
+            IconButton(onClick = onFavorite) {
+                Icon(
+                    if (w.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    stringResource(R.string.library_favorites),
+                    tint = if (w.isFavorite) MaterialTheme.colorScheme.primary else MtTheme.colors.textSecondary,
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Outlined.Delete, stringResource(R.string.action_delete), tint = MtTheme.colors.textSecondary, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 

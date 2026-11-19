@@ -337,4 +337,16 @@
     <string name="signin_invalid_email">Check the email address.</string>
     <string name="signin_email_rate_limited">Too many emails were sent. Wait a bit and try again.</string>
     <string name="signin_signup_disabled">Email sign-up isn\'t enabled on the server.</string>
+    <string name="reader_side_by_side">Side by side</string>
+    <string name="reader_overlay">Overlay</string>
+    <string name="reader_overlay_opacity">Translation opacity</string>
+    <string name="reader_reset_zoom">Reset zoom</string>
+    <string name="reader_show_translated">Show translation</string>
+    <string name="reader_show_original">Show original</string>
+    <string name="reader_jump_to_page">Jump to page</string>
+    <string name="reader_compare_hint">Drag the handle to compare original and translation</string>
+    <string name="reader_compare_handle">Compare handle</string>
+    <string name="library_view_grid">Grid view</string>
+    <string name="library_view_list">List view</string>
+    <string name="library_type_all">All types</string>
 </resources>

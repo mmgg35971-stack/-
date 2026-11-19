@@ -347,4 +347,16 @@
     <string name="signin_invalid_email">تحقق من البريد الإلكتروني.</string>
     <string name="signin_email_rate_limited">أُرسل عدد كبير من الرسائل. انتظر قليلاً ثم حاول.</string>
     <string name="signin_signup_disabled">إنشاء الحسابات بالبريد غير مفعّل على الخادم.</string>
+    <string name="reader_side_by_side">جنباً إلى جنب</string>
+    <string name="reader_overlay">شفافية</string>
+    <string name="reader_overlay_opacity">شفافية الترجمة</string>
+    <string name="reader_reset_zoom">إعادة التكبير</string>
+    <string name="reader_show_translated">عرض الترجمة</string>
+    <string name="reader_show_original">عرض الأصل</string>
+    <string name="reader_jump_to_page">الانتقال إلى صفحة</string>
+    <string name="reader_compare_hint">اسحب المقبض للمقارنة بين الأصل والترجمة</string>
+    <string name="reader_compare_handle">مقبض المقارنة</string>
+    <string name="library_view_grid">عرض شبكي</string>
+    <string name="library_view_list">عرض قائمة</string>
+    <string name="library_type_all">كل الأنواع</string>
 </resources>
