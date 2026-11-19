@@ -53,10 +53,13 @@ jobs:
           exit $missing
 
       - name: Link project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Apply database migrations
-        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+        # Newer CLIs need --remote to target the linked project; older ones use --linked.
+        run: |
+          if supabase db push --help | grep -q -- '--remote'; then target=--remote; else target=--linked; fi
+          yes | supabase db push "$target" --password "$SUPABASE_DB_PASSWORD"
 
       - name: Server secrets
         env:
