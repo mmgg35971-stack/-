@@ -1,5 +1,9 @@
 package com.mangatranslator.navigation
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
@@ -22,6 +26,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -31,6 +36,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import com.mangatranslator.core.billing.BillingManager
+import com.mangatranslator.core.push.DeepLinks
+import com.mangatranslator.core.push.PushManager
+import kotlinx.coroutines.launch
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
@@ -99,8 +109,20 @@ private val tabs = listOf(
 )
 
 @HiltViewModel
-class RootViewModel @Inject constructor(auth: AuthRepository) : ViewModel() {
+class RootViewModel @Inject constructor(
+    auth: AuthRepository,
+    private val push: PushManager,
+    private val billing: BillingManager,
+) : ViewModel() {
     val session = auth.session
+
+    /** Once per signed-in user: register this device for push and re-sync Play purchases. */
+    fun onSignedIn() {
+        viewModelScope.launch {
+            push.register()
+            runCatching { billing.restore() }
+        }
+    }
 }
 
 @Composable
@@ -111,7 +133,10 @@ fun AppRoot(vm: RootViewModel = hiltViewModel()) {
         when {
             !SupabaseConfig.isConfigured -> ConfigMissingScreen()
             session == null -> SignInScreen()
-            else -> MainScaffold(snackbar)
+            else -> {
+                LaunchedEffect(session!!.userId) { vm.onSignedIn() }
+                MainScaffold(snackbar)
+            }
         }
     }
 }
@@ -129,6 +154,20 @@ private fun MainScaffold(snackbar: SnackbarHostState) {
     val backStack by nav.currentBackStackEntryAsState()
     val current = backStack?.destination?.route
     val showBar = tabs.any { it.route == current }
+
+    // Android 13+: ask once for permission to show "chapter ready" notifications.
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+    // Opened from a push notification: go to that chapter.
+    val pendingJob by DeepLinks.pendingJobId.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingJob) {
+        pendingJob?.let { id ->
+            DeepLinks.pendingJobId.value = null
+            nav.navigate(Routes.job(id))
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },

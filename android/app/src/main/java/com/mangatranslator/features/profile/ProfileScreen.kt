@@ -74,6 +74,7 @@ import javax.inject.Inject
 class ProfileViewModel @Inject constructor(
     private val account: AccountRepository,
     private val auth: AuthRepository,
+    private val push: com.mangatranslator.core.push.PushManager,
 ) : ViewModel() {
     val me = account.me
 
@@ -83,6 +84,7 @@ class ProfileViewModel @Inject constructor(
 
     fun signOut() {
         viewModelScope.launch {
+            push.unregister()
             runCatching { auth.signOut() }
             account.clear()
         }

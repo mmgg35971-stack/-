@@ -41,6 +41,14 @@ fun AppException.messageRes(): Int = when (code) {
     "code_expired" -> R.string.redeem_expired
     "code_revoked" -> R.string.redeem_revoked
     "higher_plan_active" -> R.string.redeem_higher_plan
+    "billing_unavailable" -> R.string.error_billing_unavailable
+    "billing_not_configured" -> R.string.error_billing_not_configured
+    "purchase_owned_by_other" -> R.string.error_purchase_owned_by_other
+    "purchase_pending" -> R.string.billing_pending
+    "invalid_purchase", "unknown_product", "unknown_purchase" -> R.string.error_invalid_purchase
+    "segment_not_found", "segment_empty" -> R.string.error_segment_not_found
+    "job_busy" -> R.string.error_job_busy
+    "incomplete_response", "provider_unavailable" -> R.string.error_provider_unavailable
     else -> R.string.error_generic
 }
 

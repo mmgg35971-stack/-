@@ -16,6 +16,7 @@ class MangaTranslatorApp : Application(), Configuration.Provider, ImageLoaderFac
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var imageLoader: Provider<ImageLoader>
+    @Inject lateinit var push: com.mangatranslator.core.push.PushManager
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
@@ -28,6 +29,7 @@ class MangaTranslatorApp : Application(), Configuration.Provider, ImageLoaderFac
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_JOBS, getString(R.string.notifications), NotificationManager.IMPORTANCE_DEFAULT),
         )
+        push.init()
     }
 
     companion object {

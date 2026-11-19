@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
 import com.mangatranslator.R
+import com.mangatranslator.core.common.messageRes
 import com.mangatranslator.core.common.AppException
 import com.mangatranslator.core.common.asAppException
 import com.mangatranslator.core.designsystem.ButtonVariant
@@ -121,6 +122,21 @@ class ReaderViewModel @Inject constructor(
     suspend fun saveEdit(seg: SegmentRow, text: String) {
         segments = segments.mapValues { (_, list) -> list.map { if (it.id == seg.id) it.copy(userEditedText = text, needsReview = false) else it } }
         repo.saveSegmentEdit(seg.id, text)
+    }
+
+    /**
+     * Asks the server for a fresh translation of one bubble. A user edit is kept unless
+     * [replaceEdit] is true; the returned segment replaces the local one.
+     */
+    suspend fun retranslate(seg: SegmentRow, hint: String?, replaceEdit: Boolean): SegmentRow {
+        val res = repo.retranslateSegment(seg.id, hint, replaceEdit)
+        val updated = seg.copy(
+            translatedText = res.translatedText,
+            userEditedText = if (replaceEdit) null else seg.userEditedText,
+            needsReview = false,
+        )
+        segments = segments.mapValues { (_, list) -> list.map { if (it.id == seg.id) updated else it } }
+        return updated
     }
 
     suspend fun addToGlossary(source: String, target: String) = repo.addGlossary(job?.workId, source, target)
@@ -222,9 +238,14 @@ private fun SegmentEditorSheet(seg: SegmentRow, vm: ReaderViewModel, onDismiss: 
     var glossary by remember { mutableStateOf(false) }
     var source by remember(seg.id) { mutableStateOf(seg.originalText) }
     var busy by remember { mutableStateOf(false) }
+    var retranslating by remember { mutableStateOf(false) }
+    var showHint by remember { mutableStateOf(false) }
+    var hint by remember(seg.id) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val snackbar = LocalSnackbar.current
+    val ctx = LocalContext.current
     val saved = stringResource(R.string.editor_saved)
+    val retranslated = stringResource(R.string.editor_retranslated)
     val added = stringResource(R.string.glossary_added)
     val reported = stringResource(R.string.editor_reported)
     val failed = stringResource(R.string.error_generic)
@@ -251,6 +272,26 @@ private fun SegmentEditorSheet(seg: SegmentRow, vm: ReaderViewModel, onDismiss: 
                     }
                 }, loading = busy, modifier = Modifier.weight(1f))
                 MtButton(stringResource(R.string.editor_add_glossary), { glossary = !glossary }, variant = if (glossary) ButtonVariant.Primary else ButtonVariant.Secondary, modifier = Modifier.weight(1f))
+            }
+            if (seg.originalText.isNotBlank()) {
+                if (showHint) {
+                    MtTextField(hint, { hint = it.take(300) }, stringResource(R.string.editor_retranslate_hint))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    MtButton(stringResource(R.string.editor_retranslate), {
+                        scope.launch {
+                            retranslating = true
+                            // If the user typed their own wording, the new translation goes into the
+                            // field for review instead of silently overwriting their edit.
+                            val hadEdit = seg.userEditedText != null
+                            runCatching { vm.retranslate(seg, hint.takeIf { showHint }, replaceEdit = !hadEdit) }
+                                .onSuccess { text = it.translatedText ?: text; snackbar.showSnackbar(retranslated) }
+                                .onFailure { snackbar.showSnackbar(ctx.getString(it.asAppException().messageRes())) }
+                            retranslating = false
+                        }
+                    }, loading = retranslating, enabled = !busy, variant = ButtonVariant.Secondary, modifier = Modifier.weight(1f))
+                    MtButton(stringResource(R.string.editor_retranslate_with_hint), { showHint = !showHint }, variant = if (showHint) ButtonVariant.Primary else ButtonVariant.Ghost, modifier = Modifier.weight(1f))
+                }
             }
             MtButton(stringResource(R.string.editor_report), {
                 scope.launch {

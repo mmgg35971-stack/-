@@ -37,7 +37,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -83,6 +83,9 @@ import com.mangatranslator.core.theme.MtTheme
 import com.mangatranslator.core.theme.Radii
 import com.mangatranslator.core.theme.Spacing
 import com.mangatranslator.data.models.AdminStats
+import com.mangatranslator.data.models.AiCostDay
+import com.mangatranslator.data.models.ConfigEntry
+import com.mangatranslator.data.models.SubscriptionRow
 import com.mangatranslator.data.models.AdminUser
 import com.mangatranslator.data.models.AdminUserDetail
 import com.mangatranslator.data.models.AuditLog
@@ -94,6 +97,7 @@ import com.mangatranslator.features.giftcodes.AdminActivateViewModel
 import com.mangatranslator.features.subscriptions.planNameRes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.serialization.json.JsonElement
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -136,6 +140,13 @@ class AdminViewModel @Inject constructor(private val admin: AdminRepository) : V
     var logsError by mutableStateOf<AppException?>(null)
         private set
 
+    var costDays by mutableStateOf<List<AiCostDay>>(emptyList())
+        private set
+    var config by mutableStateOf<List<ConfigEntry>>(emptyList())
+        private set
+    var configError by mutableStateOf<AppException?>(null)
+        private set
+
     var loading by mutableStateOf(false)
 
         private set
@@ -143,6 +154,26 @@ class AdminViewModel @Inject constructor(private val admin: AdminRepository) : V
 
     fun loadStats() = launchLoading {
         try { stats = admin.stats(); statsError = null } catch (e: Exception) { statsError = e.asAppException() }
+        runCatching { costDays = admin.aiCostDaily(14) }
+    }
+
+    suspend fun grant(userId: String, plan: String, days: Int, note: String) {
+        admin.grantSubscription(userId, plan, days, note)
+        detail = admin.userDetail(userId)
+    }
+
+    suspend fun revokeSubscription(userId: String, subscriptionId: String, note: String) {
+        admin.revokeSubscription(subscriptionId, note)
+        detail = admin.userDetail(userId)
+    }
+
+    fun loadConfig() = launchLoading {
+        try { config = admin.config(); configError = null } catch (e: Exception) { configError = e.asAppException() }
+    }
+
+    suspend fun saveConfig(key: String, value: JsonElement) {
+        admin.updateConfig(key, value)
+        config = admin.config()
     }
 
     fun searchUsers(q: String = userQuery) {
@@ -189,25 +220,27 @@ class AdminViewModel @Inject constructor(private val admin: AdminRepository) : V
 @Composable
 fun AdminScreen(nav: NavController, vm: AdminViewModel = hiltViewModel()) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf(R.string.admin_tab_overview, R.string.admin_tab_users, R.string.admin_tab_codes, R.string.admin_tab_logs)
+    val tabs = listOf(R.string.admin_tab_overview, R.string.admin_tab_users, R.string.admin_tab_codes, R.string.admin_tab_logs, R.string.admin_tab_settings)
     LaunchedEffect(tab) {
         when (tab) {
             0 -> vm.loadStats()
             1 -> vm.searchUsers()
             2 -> vm.loadCodes()
             3 -> vm.loadLogs()
+            4 -> vm.loadConfig()
         }
     }
     Column(Modifier.fillMaxSize()) {
         MtTopBar(stringResource(R.string.admin_title), onBack = { nav.popBackStack() })
-        PrimaryTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.background) {
+        PrimaryScrollableTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.background, edgePadding = Spacing.sm) {
             tabs.forEachIndexed { i, res -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(stringResource(res), maxLines = 1) }) }
         }
         when (tab) {
             0 -> OverviewTab(vm)
             1 -> UsersTab(vm)
             2 -> CodesTab(vm)
-            else -> LogsTab(vm)
+            3 -> LogsTab(vm)
+            else -> SettingsTab(vm)
         }
     }
 }
@@ -247,6 +280,7 @@ private fun OverviewTab(vm: AdminViewModel) {
                 Stat(tile, R.string.admin_ai_cost_today, "$" + "%.2f".format(s.aiCostTodayUsd))
                 Stat(tile, R.string.admin_ai_failed_today, s.aiFailedToday.toString())
             }
+            if (vm.costDays.isNotEmpty()) AiCostCard(vm.costDays, s.aiCostLimitUsd)
             s.generatedAt?.let { Text(Formatters.dateTime(it), style = MaterialTheme.typography.labelSmall, color = MtTheme.colors.textSecondary) }
             MtButton(stringResource(R.string.action_retry), { vm.loadStats() }, variant = ButtonVariant.Secondary, loading = vm.loading, modifier = Modifier.fillMaxWidth())
         }
@@ -291,6 +325,10 @@ private fun UsersTab(vm: AdminViewModel) {
         }
     }
     vm.detail?.let { d ->
+        var granting by remember(d.profile.id) { mutableStateOf(false) }
+        var revoking by remember(d.profile.id) { mutableStateOf<SubscriptionRow?>(null) }
+        if (granting) GrantSubscriptionDialog(vm, d.profile.id) { granting = false }
+        revoking?.let { sub -> RevokeSubscriptionDialog(vm, d.profile.id, sub) { revoking = null } }
         AlertDialog(
             onDismissRequest = vm::closeUser,
             title = { Text(d.profile.displayName ?: d.profile.email ?: d.profile.id) },
@@ -304,11 +342,19 @@ private fun UsersTab(vm: AdminViewModel) {
                     Spacer(Modifier.height(Spacing.sm))
                     Text(stringResource(R.string.admin_user_subs), style = MaterialTheme.typography.titleSmall)
                     d.subscriptions.forEach { s ->
-                        Text(
-                            "${stringResource(planNameRes(s.planId))} · ${s.source} · ${s.status} · ${Formatters.date(s.startsAt)} → ${s.expiresAt?.let(Formatters::date) ?: "∞"}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "${stringResource(planNameRes(s.planId))} · ${s.source} · ${s.status} · ${Formatters.date(s.startsAt)} → ${s.expiresAt?.let(Formatters::date) ?: "∞"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (s.status == "active") {
+                                MtButton(stringResource(R.string.admin_sub_revoke), { revoking = s }, variant = ButtonVariant.Ghost)
+                            }
+                        }
                     }
+                    Spacer(Modifier.height(Spacing.sm))
+                    MtButton(stringResource(R.string.admin_sub_grant), { granting = true }, variant = ButtonVariant.Secondary, modifier = Modifier.fillMaxWidth())
                     if (d.usageHistory.isNotEmpty()) {
                         Spacer(Modifier.height(Spacing.sm))
                         d.usageHistory.take(14).forEach { Text("${it.date}: ${it.used}", style = MaterialTheme.typography.labelSmall) }

@@ -2,6 +2,9 @@ package com.mangatranslator.data.repositories
 
 import com.mangatranslator.core.network.SupabaseApi
 import com.mangatranslator.data.models.AdminStats
+import com.mangatranslator.data.models.AiCostResponse
+import com.mangatranslator.data.models.ConfigResponse
+import com.mangatranslator.data.models.GrantResponse
 import com.mangatranslator.data.models.AdminUserDetail
 import com.mangatranslator.data.models.AdminUsersResponse
 import com.mangatranslator.data.models.AuditLogsResponse
@@ -9,6 +12,7 @@ import com.mangatranslator.data.models.CreatedCodesResponse
 import com.mangatranslator.data.models.GiftCodesResponse
 import com.mangatranslator.data.models.OkResponse
 import com.mangatranslator.data.models.RedeemResponse
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -75,6 +79,31 @@ class AdminRepository @Inject constructor(private val api: SupabaseApi) {
         put("limit", 50)
         put("offset", offset)
     }.logs
+
+    suspend fun grantSubscription(userId: String, plan: String, days: Int, note: String) = call("subscription_grant", GrantResponse.serializer()) {
+        put("user_id", userId)
+        put("plan", plan)
+        put("days", days)
+        if (note.isNotBlank()) put("note", note.take(300))
+    }
+
+    suspend fun revokeSubscription(subscriptionId: String, note: String) {
+        call("subscription_revoke", OkResponse.serializer()) {
+            put("subscription_id", subscriptionId)
+            if (note.isNotBlank()) put("note", note.take(300))
+        }
+    }
+
+    suspend fun config() = call("config_get", ConfigResponse.serializer()).config
+
+    suspend fun updateConfig(key: String, value: JsonElement) {
+        call("config_update", OkResponse.serializer()) {
+            put("key", key)
+            put("value", value)
+        }
+    }
+
+    suspend fun aiCostDaily(days: Int = 14) = call("ai_cost_daily", AiCostResponse.serializer()) { put("days", days) }.days
 
     private suspend fun <T> call(
         action: String,

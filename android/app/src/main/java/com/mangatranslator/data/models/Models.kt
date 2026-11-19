@@ -223,6 +223,32 @@ data class RedeemResponse(
 @Serializable
 data class OkResponse(val ok: Boolean = true)
 
+@Serializable
+data class BillingVerifyResponse(
+    val ok: Boolean,
+    @SerialName("plan_id") val planId: String,
+    val status: String,
+    @SerialName("expires_at") val expiresAt: String? = null,
+)
+
+@Serializable
+data class RetranslateResponse(val ok: Boolean, @SerialName("segment_id") val segmentId: String, @SerialName("translated_text") val translatedText: String)
+
+@Serializable
+data class AiCostDay(val day: String, @SerialName("cost_usd") val costUsd: Double, val requests: Long, val failed: Long)
+
+@Serializable
+data class AiCostResponse(val days: List<AiCostDay>)
+
+@Serializable
+data class ConfigEntry(val key: String, val value: kotlinx.serialization.json.JsonElement, val description: String? = null, @SerialName("updated_at") val updatedAt: String? = null)
+
+@Serializable
+data class ConfigResponse(val config: List<ConfigEntry>)
+
+@Serializable
+data class GrantResponse(val ok: Boolean, @SerialName("expires_at") val expiresAt: String? = null)
+
 // ---------------- Admin ----------------
 
 @Serializable

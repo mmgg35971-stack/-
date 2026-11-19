@@ -19,6 +19,7 @@ import com.mangatranslator.data.models.CreateJobResponse
 import com.mangatranslator.data.models.JobRow
 import com.mangatranslator.data.models.OkResponse
 import com.mangatranslator.data.models.PageRow
+import com.mangatranslator.data.models.RetranslateResponse
 import com.mangatranslator.data.models.SegmentRow
 import com.mangatranslator.data.models.StartJobResponse
 import com.mangatranslator.features.translate.PageImporter
@@ -153,6 +154,14 @@ class TranslationRepository @Inject constructor(
 
     suspend fun saveSegmentEdit(segmentId: String, text: String) =
         api.update("translation_segments", mapOf("id" to "eq.$segmentId"), buildJsonObject { put("user_edited_text", text) })
+
+    /** Re-translates one bubble on the server (story context + neighbouring lines). Does not count a chapter. */
+    suspend fun retranslateSegment(segmentId: String, hint: String?, replaceEdit: Boolean): RetranslateResponse =
+        api.function("segments-retranslate", RetranslateResponse.serializer(), buildJsonObject {
+            put("segment_id", segmentId)
+            hint?.trim()?.takeIf { it.isNotEmpty() }?.let { put("hint", it.take(300)) }
+            put("replace_edit", replaceEdit)
+        })
 
     suspend fun reportSegment(segmentId: String, reason: String) {
         val uid = requireNotNull(sessionStore.session.value?.userId)

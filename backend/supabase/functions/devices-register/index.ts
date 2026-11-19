@@ -1,16 +1,16 @@
 // POST /devices-register { token, app_language? }  — store this device's FCM token
-// DELETE /devices-register { token }                — on sign-out
+// POST /devices-register { token, remove: true }    — on sign-out (DELETE also accepted)
 import { handle, json, oneOf, readJson, str } from "../_shared/http.ts";
 import { adminClient, rateLimit, requireUser } from "../_shared/supabase.ts";
 
 Deno.serve(handle(["POST", "DELETE"], async (req) => {
   const user = await requireUser(req);
   await rateLimit(`devices:${user.id}`, 3600, 30);
-  const body = await readJson<{ token?: unknown; app_language?: unknown }>(req);
+  const body = await readJson<{ token?: unknown; app_language?: unknown; remove?: unknown }>(req);
   const token = str(body.token, "token", { min: 20, max: 4096 });
   const db = adminClient();
 
-  if (req.method === "DELETE") {
+  if (req.method === "DELETE" || body.remove === true) {
     await db.from("device_tokens").delete().eq("token", token).eq("user_id", user.id);
     return json({ ok: true });
   }
