@@ -1,6 +1,10 @@
 package com.mangatranslator.core.push
 
+import android.Manifest
 import android.app.PendingIntent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -39,7 +43,11 @@ class PushService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()
-        // Silently skipped when the user denied the notification permission.
-        runCatching { NotificationManagerCompat.from(this).notify(jobId.hashCode(), n) }
+        // Skipped when the user denied the notification permission (Android 13+).
+        val allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (allowed) {
+            try { NotificationManagerCompat.from(this).notify(jobId.hashCode(), n) } catch (_: SecurityException) { }
+        }
     }
 }
