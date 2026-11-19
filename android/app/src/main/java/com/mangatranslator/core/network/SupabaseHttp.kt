@@ -214,6 +214,7 @@ fun parseError(status: Int, body: String): AppException {
     val code = when {
         fnCode != null && fnCode != "invalid_grant" -> fnCode
         pgCode == "42501" -> "forbidden"
+        pgCode == "23505" -> "duplicate"
         status == 401 -> "session_expired"
         status == 403 -> "forbidden"
         status == 429 -> "rate_limited"

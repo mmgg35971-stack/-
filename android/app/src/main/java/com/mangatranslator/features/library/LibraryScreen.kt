@@ -431,6 +431,7 @@ fun WorkScreen(nav: NavController, vm: WorkViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 val w = vm.work
+                item { StoryMemoryEntry { nav.navigate(Routes.storyMemory(vm.workId)) } }
                 if (w?.lastReadJobId != null) {
                     item {
                         MtButton(

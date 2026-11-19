@@ -18,8 +18,8 @@
 | `translation_pages` | الصفحات: المسار الأصلي، والأبعاد، والحالة، والمحاولات | قراءة |
 | `translation_segments` | مقاطع النص: مربع مُطبّع (0..1)، والنص الأصلي، والثقة، و`needs_review`، و`translated_text`، و`user_edited_text`، و`style` | قراءة، وتعديل `user_edited_text` و`style` و`category` و`reported_bad` فقط |
 | `translation_history` (view) | عرض مسطح للسجل مع عنوان العمل والغلاف، `security_invoker` | قراءة |
-| `glossary_entries` | قاموس المستخدم (اسم، مكان، مصطلح...)، فريد على (user, work, lower(term)) | CRUD |
-| `work_context` | ملخص سياق القصة لكل عمل | CRUD |
+| `glossary_entries` | قاموس المستخدم (اسم، مكان، مصطلح...)، فريد على (user, work, lower(term)). `status`: `suggested` (اقتراح من AI لا يُستخدم) أو `confirmed` | CRUD |
+| `work_context` | ذاكرة القصة لكل عمل (ملخص، شخصيات، أسلوب). `memory_frozen` يمنع العامل من تحديثها | CRUD |
 | `gift_code_batches` / `gift_codes` / `gift_code_redemptions` | دفعات وأكواد (hash + hint) واستخدامات (فريد لكل كود ومستخدم) | لا وصول |
 | `admin_activation_secrets` / `admin_roles` | أسرار التفعيل (hash) وأدوار المدير | لا وصول |
 | `admin_audit_logs` | سجل للإضافة فقط (trigger يمنع UPDATE وDELETE) | لا وصول |
@@ -52,6 +52,7 @@
 | `admin_update_config(actor, key, value)` | تعديل مفاتيح محددة فقط بعد التحقق من القيم، مع تسجيل القديم والجديد |
 | `admin_ai_cost_daily(actor, days)` | تكلفة AI والطلبات والفشل لكل يوم UTC |
 | `worker_set_segment_translation(seg, text, clear_edit)` | حفظ إعادة ترجمة مقطع واحد |
+| `worker_add_glossary_suggestions(user, work, items)` | يضيف اقتراحات AI الجديدة فقط (بحد 100 معلّق لكل عمل)، للعامل فقط |
 
 ## Storage
 
@@ -63,5 +64,11 @@ bucket خاص `chapter-pages`. المسار `{uid}/{job}/original/NNNN.ext` (و�
 `backend/scripts/test-db.sh` يشغّل كل الترحيلات على Postgres مؤقت، ثم:
 `tests/10_business_rules.sql` (التسجيل، والحد المجاني، وidempotency، والاسترداد، وبوابات الخطط،
 وتفعيل المدير وRBAC، والأكواد، وتعارض الخطط، وانتهاء الاشتراك، وRLS والصلاحيات، ووصول anon)،
-و`tests/20_billing_admin.sql` (اشتراكات Play والترقية ورفض رمز الغير، ومنح وإلغاء المدير، والإعدادات)، ثم اختباري تزامن: 20 استخداماً متزامناً لكود واحد تعطي نجاحاً واحداً، و15 بدءاً متزامناً
+و`tests/20_billing_admin.sql` (اشتراكات Play والترقية ورفض رمز الغير، ومنح وإلغاء المدير، والإعدادات)، و`tests/30_memory_glossary.sql` (الاقتراحات لا تمسّ المصطلحات المعتمدة، وتجميد ومسح الذاكرة، والعزل بين المستخدمين)، ثم اختباري تزامن: 20 استخداماً متزامناً لكود واحد تعطي نجاحاً واحداً، و15 بدءاً متزامناً
 على حساب Free تعطي 10 محتسبة بالضبط.
+
+
+## الترحيل 0007 (ذاكرة القصة واقتراحات القاموس)
+
+يضيف `glossary_entries.status` (القيمة الافتراضية `confirmed`، فلا تتغير المصطلحات الحالية) و`work_context.memory_frozen` ودالة `worker_add_glossary_suggestions`.
+الرجوع مكتوب في رأس ملف الترحيل.

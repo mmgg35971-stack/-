@@ -64,6 +64,7 @@ import com.mangatranslator.features.history.HistoryScreen
 import com.mangatranslator.features.home.HomeScreen
 import com.mangatranslator.features.library.LibraryScreen
 import com.mangatranslator.features.library.WorkScreen
+import com.mangatranslator.features.library.StoryMemoryScreen
 import com.mangatranslator.features.notifications.NotificationsScreen
 import com.mangatranslator.features.profile.ProfileScreen
 import com.mangatranslator.features.reader.ReaderScreen
@@ -84,6 +85,7 @@ object Routes {
     const val JOB = "job/{jobId}"
     const val READER = "reader/{jobId}"
     const val WORK = "work/{workId}"
+    const val STORY_MEMORY = "work/{workId}/memory"
     const val PLANS = "plans"
     const val REDEEM = "redeem"
     const val SETTINGS = "settings"
@@ -95,6 +97,7 @@ object Routes {
     fun job(id: String) = "job/$id"
     fun reader(id: String) = "reader/$id"
     fun work(id: String) = "work/$id"
+    fun storyMemory(workId: String) = "work/$workId/memory"
     fun legal(kind: String) = "legal/$kind"
 }
 
@@ -209,6 +212,7 @@ private fun MainScaffold(snackbar: SnackbarHostState) {
                 composable(Routes.JOB, listOf(navArgument("jobId") { type = NavType.StringType })) { JobScreen(nav) }
                 composable(Routes.READER, listOf(navArgument("jobId") { type = NavType.StringType })) { ReaderScreen(nav) }
                 composable(Routes.WORK, listOf(navArgument("workId") { type = NavType.StringType })) { WorkScreen(nav) }
+                composable(Routes.STORY_MEMORY, listOf(navArgument("workId") { type = NavType.StringType })) { StoryMemoryScreen(nav) }
                 composable(Routes.PLANS) { SubscriptionScreen(nav) }
                 composable(Routes.REDEEM) { RedeemScreen(nav) }
                 composable(Routes.SETTINGS) { SettingsScreen(nav) }

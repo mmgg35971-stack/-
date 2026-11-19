@@ -162,12 +162,22 @@ async function translateNextChunk(db: SupabaseClient, job: Job): Promise<StepRes
     if (error) throw error;
 
     if (job.work_id) {
-      await db.from("work_context").upsert({
-        work_id: job.work_id,
-        user_id: job.user_id,
-        story_summary: result.updatedContext.summary,
-        characters: result.updatedContext.characters,
-      }, { onConflict: "work_id" });
+      // A frozen memory is the user's choice: keep it exactly as they left it.
+      const { data: wc } = await db.from("work_context").select("memory_frozen").eq("work_id", job.work_id).maybeSingle();
+      if (!wc?.memory_frozen) {
+        await db.from("work_context").upsert({
+          work_id: job.work_id,
+          user_id: job.user_id,
+          story_summary: result.updatedContext.summary,
+          characters: result.updatedContext.characters,
+        }, { onConflict: "work_id" });
+      }
+      // New names/terms wait as suggestions; they are used only after the user confirms them.
+      if (result.suggestedGlossary.length > 0) {
+        await db.rpc("worker_add_glossary_suggestions", {
+          p_user: job.user_id, p_work: job.work_id, p_items: result.suggestedGlossary,
+        });
+      }
     }
   } catch (e) {
     for (const p of chunkPages) await failOrRetryPage(db, job, p.id, attempt, e);
@@ -183,7 +193,8 @@ export async function buildRequest(db: SupabaseClient, job: Job, segments: Sourc
 
   let glossary: TranslationRequest["glossary"] = [];
   if (settings?.use_glossary !== false) {
-    let q = db.from("glossary_entries").select("source_term, target_term, term_type").eq("user_id", job.user_id);
+    let q = db.from("glossary_entries").select("source_term, target_term, term_type").eq("user_id", job.user_id)
+      .eq("status", "confirmed");
     q = job.work_id ? q.or(`work_id.is.null,work_id.eq.${job.work_id}`) : q.is("work_id", null);
     const { data } = await q.limit(500);
     glossary = (data ?? []).map((g) => ({ source: g.source_term, target: g.target_term, type: g.term_type }));
