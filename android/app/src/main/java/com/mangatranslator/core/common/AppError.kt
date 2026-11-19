@@ -29,6 +29,7 @@ fun AppException.messageRes(): Int = when (code) {
     "unauthenticated", "session_expired" -> R.string.error_session_expired
     "rate_limited" -> R.string.error_rate_limited
     "forbidden" -> R.string.error_forbidden
+    "duplicate" -> R.string.error_duplicate
     "provider_not_configured" -> R.string.error_provider_not_configured
     "server_not_configured" -> R.string.error_server_not_configured
     "quality_not_in_plan" -> R.string.error_quality_not_in_plan

@@ -355,3 +355,33 @@ data class AuditLog(
 
 @Serializable
 data class AuditLogsResponse(val logs: List<AuditLog>)
+
+/** One character in a work's story memory (mirrors work_context.characters items). */
+@Serializable
+data class StoryCharacter(
+    val name: String,
+    val arabic: String = "",
+    val notes: String = "",
+)
+
+@Serializable
+data class WorkContext(
+    @SerialName("work_id") val workId: String,
+    @SerialName("story_summary") val storySummary: String = "",
+    val characters: List<StoryCharacter> = emptyList(),
+    @SerialName("dialogue_style") val dialogueStyle: String = "",
+    @SerialName("memory_frozen") val memoryFrozen: Boolean = false,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+data class GlossaryEntry(
+    val id: String,
+    @SerialName("work_id") val workId: String? = null,
+    @SerialName("source_term") val sourceTerm: String,
+    @SerialName("target_term") val targetTerm: String,
+    @SerialName("term_type") val termType: String = "term",
+    val status: String = "confirmed",
+) {
+    val isSuggested get() = status == "suggested"
+}

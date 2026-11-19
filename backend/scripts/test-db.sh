@@ -25,6 +25,7 @@ for f in "$MIG"/*.sql; do
 done
 "${PSQL[@]}" -f "$TESTS/10_business_rules.sql"
 "${PSQL[@]}" -f "$TESTS/20_billing_admin.sql"
+"${PSQL[@]}" -f "$TESTS/30_memory_glossary.sql"
 
 # --- Concurrency: 20 users try to redeem ONE single-use code at the same instant
 "${PSQL[@]}" <<'SQL'
