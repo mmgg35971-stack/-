@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "npm:@anthropic-ai/sdk@1.4.0";
 import { buildUserMessage, OUTPUT_SCHEMA, SYSTEM_PROMPT } from "./prompt.ts";
 import {
   type SegmentCategory,

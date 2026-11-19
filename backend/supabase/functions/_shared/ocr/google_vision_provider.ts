@@ -1,4 +1,4 @@
-import { encodeBase64 } from "@std/encoding/base64";
+import { encodeBase64 } from "jsr:@std/encoding@1.0.10/base64";
 import { OcrError, type OcrPageResult, type OcrProvider, type OcrRegion } from "./types.ts";
 
 // Google Cloud Vision DOCUMENT_TEXT_DETECTION: returns blocks (≈ one bubble /

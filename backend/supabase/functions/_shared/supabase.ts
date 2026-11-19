@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type User } from "npm:@supabase/supabase-js@2.119.0";
 import { AppError } from "./http.ts";
 
 export function env(name: string, required = true): string {
