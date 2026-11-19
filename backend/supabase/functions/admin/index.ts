@@ -13,7 +13,14 @@ const ACTIONS = [
   "gift_codes_create",
   "gift_codes_list",
   "gift_code_revoke",
+  "subscription_grant",
+  "subscription_revoke",
+  "config_get",
+  "config_update",
+  "ai_cost_daily",
 ] as const;
+
+const CONFIG_KEYS = ["fair_use", "ai_cost_alerts", "max_pages_per_chapter"] as const;
 
 Deno.serve(handle(["POST"], async (req) => {
   const admin = await requireAdmin(req);
@@ -132,6 +139,51 @@ Deno.serve(handle(["POST"], async (req) => {
       const { data, count, error } = await q;
       if (error) throw error;
       return json({ codes: data, total: count });
+    }
+
+    case "subscription_grant": {
+      const { data, error } = await db.rpc("admin_grant_subscription", {
+        p_actor: admin.id,
+        p_user: uuid(body.user_id, "user_id"),
+        p_plan: oneOf(body.plan, "plan", ["pro", "premium"]),
+        p_days: int(body.days, "days", 1, 3650),
+        p_note: str(body.note, "note", { max: 300, optional: true }) ?? "",
+      });
+      if (error) throw error;
+      if (!data.ok) throw new AppError(data.error === "user_not_found" ? 404 : 400, data.error);
+      return json(data);
+    }
+
+    case "subscription_revoke": {
+      const { data, error } = await db.rpc("admin_revoke_subscription", {
+        p_actor: admin.id,
+        p_subscription: uuid(body.subscription_id, "subscription_id"),
+        p_note: str(body.note, "note", { max: 300, optional: true }) ?? "",
+      });
+      if (error) throw error;
+      if (!data) throw new AppError(409, "subscription_not_active");
+      return json({ ok: true });
+    }
+
+    case "config_get": {
+      const { data, error } = await db.from("app_config").select("key, value, description, updated_at").in("key", [...CONFIG_KEYS]);
+      if (error) throw error;
+      return json({ config: data });
+    }
+
+    case "config_update": {
+      const key = oneOf(body.key, "key", CONFIG_KEYS);
+      const { data, error } = await db.rpc("admin_update_config", { p_actor: admin.id, p_key: key, p_value: body.value ?? null });
+      if (error) throw error;
+      if (!data.ok) throw new AppError(400, data.error);
+      return json({ ok: true });
+    }
+
+    case "ai_cost_daily": {
+      const days = body.days === undefined ? 14 : int(body.days, "days", 1, 90);
+      const { data, error } = await db.rpc("admin_ai_cost_daily", { p_actor: admin.id, p_days: days });
+      if (error) throw error;
+      return json({ days: (data ?? []).map((r: any) => ({ ...r, cost_usd: Number(r.cost_usd), requests: Number(r.requests), failed: Number(r.failed) })) });
     }
 
     case "gift_code_revoke": {

@@ -2,19 +2,13 @@
 // Runs pipeline steps until its time budget is spent, then hands off to a
 // fresh invocation. Also safe to call from a scheduler (pg_cron) every minute
 // to pick up anything left behind after a crash.
+import { safeEqual } from "../_shared/codes.ts";
 import { handle, json, readJson } from "../_shared/http.ts";
 import { adminClient, env } from "../_shared/supabase.ts";
 import { runStep } from "../_shared/pipeline.ts";
 import { kickWorker } from "../_shared/worker_kick.ts";
 
 const TIME_BUDGET_MS = 110_000;
-
-function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 Deno.serve(handle(["POST"], async (req) => {
   if (!safeEqual(req.headers.get("x-worker-secret") ?? "", env("WORKER_SECRET"))) {

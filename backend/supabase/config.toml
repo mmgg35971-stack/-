@@ -30,3 +30,7 @@ file_size_limit = "15MiB"
 # Functions called by the app verify the user JWT themselves (requireUser).
 [functions.jobs-worker]
 verify_jwt = false
+
+# Google Play RTDN (Pub/Sub push) authenticates with ?secret=PLAY_RTDN_SECRET, not a user JWT.
+[functions.billing-rtdn]
+verify_jwt = false

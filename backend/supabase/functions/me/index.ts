@@ -2,6 +2,7 @@
 // The app must treat this as the only source of truth for plan and limits.
 import { handle, json } from "../_shared/http.ts";
 import { adminClient, requireUser } from "../_shared/supabase.ts";
+import { kickWorker } from "../_shared/worker_kick.ts";
 
 Deno.serve(handle(["GET", "POST"], async (req) => {
   const user = await requireUser(req);
@@ -17,6 +18,13 @@ Deno.serve(handle(["GET", "POST"], async (req) => {
   ]);
   if (pErr) throw pErr;
   if (eErr) throw eErr;
+
+  // Self-healing without a scheduler: if this user's chapter has not moved for
+  // 2 minutes (worker crashed or timed out), wake the worker again.
+  const stale = new Date(Date.now() - 120_000).toISOString();
+  const { data: stuck } = await db.from("translation_jobs").select("id")
+    .eq("user_id", user.id).in("status", ["queued", "ocr", "translating"]).lt("updated_at", stale).limit(1);
+  if (stuck?.length) kickWorker(stuck[0].id);
 
   return json({ profile, entitlements, server_time: new Date().toISOString() });
 }));

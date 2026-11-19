@@ -1,0 +1,97 @@
+name: Deploy backend
+
+# Publishes the database migrations and Edge Functions to the Supabase project.
+# Runs after merging to main, or by hand from the Actions tab ("Run workflow").
+#
+# Repository secrets (Settings > Secrets and variables > Actions):
+#   SUPABASE_ACCESS_TOKEN   required  supabase.com > Account > Access Tokens
+#   SUPABASE_DB_PASSWORD    required  the database password chosen when creating the project
+#   ANTHROPIC_API_KEY       optional  translation (console.anthropic.com)
+#   GOOGLE_VISION_API_KEY   optional  OCR (Google Cloud, Cloud Vision API)
+#   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON / FCM_SERVICE_ACCOUNT_JSON  optional (billing / push)
+# Internal secrets (GIFT_CODE_PEPPER, ADMIN_SECRET_PEPPER, WORKER_SECRET,
+# PLAY_RTDN_SECRET) are generated once on the server and never rotated by this job.
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/supabase/**", ".github/workflows/deploy-backend.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+env:
+  SUPABASE_PROJECT_REF: oimwakawhdurcxnzodmn
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Check required secrets
+        run: |
+          missing=0
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || { echo "::error::Add the SUPABASE_ACCESS_TOKEN repository secret"; missing=1; }
+          [ -n "$SUPABASE_DB_PASSWORD" ] || { echo "::error::Add the SUPABASE_DB_PASSWORD repository secret"; missing=1; }
+          exit $missing
+
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Apply database migrations
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Server secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_VISION_API_KEY: ${{ secrets.GOOGLE_VISION_API_KEY }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          existing="$(supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" -o json | jq -r '.[].name')"
+          envfile="$(mktemp)"; trap 'rm -f "$envfile"' EXIT
+          # Internal secrets: create once, never overwrite (rotating the pepper would break unused gift codes).
+          for name in GIFT_CODE_PEPPER ADMIN_SECRET_PEPPER WORKER_SECRET PLAY_RTDN_SECRET; do
+            if ! grep -qx "$name" <<<"$existing"; then
+              echo "$name=$(openssl rand -hex 32)" >> "$envfile"; echo "generated $name"
+            fi
+          done
+          echo "TRANSLATION_PROVIDER=claude" >> "$envfile"
+          echo "CLAUDE_MODEL=claude-opus-5-5" >> "$envfile"
+          echo "OCR_PROVIDER=google_vision" >> "$envfile"
+          echo "GOOGLE_PLAY_PACKAGE_NAME=com.mangatranslator.app" >> "$envfile"
+          # Provider keys: only set when present in GitHub, so a missing one never erases a value set elsewhere.
+          for name in ANTHROPIC_API_KEY GOOGLE_VISION_API_KEY GOOGLE_PLAY_SERVICE_ACCOUNT_JSON FCM_SERVICE_ACCOUNT_JSON; do
+            value="${!name:-}"
+            if [ -n "$value" ]; then
+              printf '%s=%s\n' "$name" "$(tr -d '\n' <<<"$value")" >> "$envfile"; echo "set $name"
+            fi
+          done
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$envfile"
+
+      - name: Deploy Edge Functions
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Summary
+        run: |
+          {
+            echo "### Backend deployed to $SUPABASE_PROJECT_REF"
+            echo "- Migrations applied, Edge Functions deployed."
+            supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" -o json | jq -r '"- Secrets configured: " + ([.[].name] | join(", "))'
+          } >> "$GITHUB_STEP_SUMMARY"

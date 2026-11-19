@@ -9,12 +9,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ocrProvider, translationProvider } from "./providers.ts";
 import { OcrError, REVIEW_CONFIDENCE, sortReadingOrder } from "./ocr/types.ts";
 import { type SourceSegment, TranslationError, type TranslationRequest } from "./translation/types.ts";
+import { sendPush } from "./google/fcm.ts";
 
 export const MAX_PAGE_ATTEMPTS = 3;
 export const CHUNK_MAX_PAGES = 8;
 export const CHUNK_MAX_SEGMENTS = 300;
 
-type Job = {
+export type Job = {
   id: string;
   user_id: string;
   work_id: string | null;
@@ -174,7 +175,7 @@ async function translateNextChunk(db: SupabaseClient, job: Job): Promise<StepRes
   return "progress";
 }
 
-async function buildRequest(db: SupabaseClient, job: Job, segments: SourceSegment[]): Promise<TranslationRequest> {
+export async function buildRequest(db: SupabaseClient, job: Job, segments: SourceSegment[]): Promise<TranslationRequest> {
   const [{ data: settings }, { data: ent }] = await Promise.all([
     db.from("user_settings").select("use_glossary").eq("user_id", job.user_id).single(),
     db.rpc("usage_status", { p_user: job.user_id }),
@@ -242,6 +243,11 @@ async function finalize(db: SupabaseClient, job: Job) {
         : `${job.chapter_title}: لم يُحتسب الفصل من حدك اليومي. حاول مرة أخرى لاحقاً.`,
       data: { job_id: job.id, status },
     });
+    await sendPush(db, job.user_id, {
+      title: ok ? "اكتملت ترجمة الفصل" : "تعذرت ترجمة الفصل",
+      body: job.chapter_title,
+      data: { job_id: job.id, status: String(status) },
+    });
   }
 }
 
@@ -250,7 +256,7 @@ async function readingDirection(db: SupabaseClient, userId: string): Promise<"lt
   return (data?.reading_direction ?? "vertical") as "ltr" | "rtl" | "vertical";
 }
 
-async function logUsage(
+export async function logUsage(
   db: SupabaseClient, job: Job, provider: string, operation: "ocr" | "translate",
   inputUnits: number, outputUnits: number, cost: number, success: boolean, errorCode?: string,
 ) {
