@@ -52,6 +52,11 @@ jobs:
           [ -n "$SUPABASE_DB_PASSWORD" ] || { echo "::error::Add the SUPABASE_DB_PASSWORD repository secret"; missing=1; }
           exit $missing
 
+      # Newer CLIs refuse to change a production project without a terminal unless --yes is given.
+      - name: Non-interactive confirmation
+        run: |
+          if supabase --help | grep -q -- '--yes'; then echo "YES=--yes" >> "$GITHUB_ENV"; else echo "YES=" >> "$GITHUB_ENV"; fi
+
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
@@ -59,7 +64,7 @@ jobs:
         # Newer CLIs need --remote to target the linked project; older ones use --linked.
         run: |
           if supabase db push --help | grep -q -- '--remote'; then target=--remote; else target=--linked; fi
-          yes | supabase db push "$target" --password "$SUPABASE_DB_PASSWORD"
+          supabase db push "$target" --password "$SUPABASE_DB_PASSWORD" $YES
 
       - name: Server secrets
         env:
@@ -89,10 +94,10 @@ jobs:
               printf '%s=%s\n' "$name" "$(tr -d '\n' <<<"$value")" >> "$envfile"; echo "set $name"
             fi
           done
-          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$envfile"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$envfile" $YES
 
       - name: Deploy Edge Functions
-        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api $YES
 
       - name: Summary
         run: |
