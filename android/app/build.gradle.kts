@@ -50,6 +50,14 @@ android {
     }
 
     signingConfigs {
+        // Shared debug key (committed on purpose, test builds only): every CI build gets the
+        // same SHA-1, so Google sign-in keeps working for the .debug app. The release key is never committed.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (keystoreProps.getProperty("storeFile") != null) {
             create("release") {
                 storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
