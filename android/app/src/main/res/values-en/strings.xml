@@ -31,7 +31,7 @@
     <string name="error_uploads_incomplete">Not all pages finished uploading yet.</string>
     <string name="error_account_inactive">This account is not active.</string>
     <string name="config_missing_title">App is not connected to a backend</string>
-    <string name="config_missing_body">This build has no SUPABASE_URL, SUPABASE_ANON_KEY or GOOGLE_WEB_CLIENT_ID. See docs/setup/SETUP.md and rebuild.</string>
+    <string name="config_missing_body">This build has no SUPABASE_URL or SUPABASE_ANON_KEY. See docs/setup/SETUP.md and rebuild.</string>
     <string name="signin_title">Translate your favourite chapters into Arabic</string>
     <string name="signin_subtitle">Manga, manhwa, manhua and webtoons in natural Arabic that keeps the voice of every character.</string>
     <string name="signin_google">Continue with Google</string>
@@ -321,4 +321,20 @@
     <string name="admin_cfg_cost_limit">Daily cost limit (USD)</string>
     <string name="admin_cfg_max_pages">Chapter size</string>
     <string name="admin_cfg_max_pages_value">Max pages per chapter</string>
+    <string name="signin_email">Email</string>
+    <string name="signin_password">Password</string>
+    <string name="signin_name">Your name</string>
+    <string name="signin_password_rule">At least 8 characters.</string>
+    <string name="signin_submit">Sign in</string>
+    <string name="signin_create">Create account</string>
+    <string name="signin_no_account">No account? Create one</string>
+    <string name="signin_have_account">Have an account? Sign in</string>
+    <string name="signin_confirm_sent">We sent a confirmation email to %1$s. Open the link, then sign in.</string>
+    <string name="signin_invalid_credentials">Wrong email or password.</string>
+    <string name="signin_email_not_confirmed">Your email isn\'t confirmed yet. Open the confirmation email and try again.</string>
+    <string name="signin_user_exists">This email is already registered. Sign in instead.</string>
+    <string name="signin_weak_password">Password is too weak. Use at least 8 characters with numbers.</string>
+    <string name="signin_invalid_email">Check the email address.</string>
+    <string name="signin_email_rate_limited">Too many emails were sent. Wait a bit and try again.</string>
+    <string name="signin_signup_disabled">Email sign-up isn\'t enabled on the server.</string>
 </resources>

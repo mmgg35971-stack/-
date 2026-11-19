@@ -15,11 +15,17 @@ site_url = "mangatranslator://auth"
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 
-# Google sign-in on Android sends a Google ID token to
+# Email + password accounts (the main sign-in). Confirmation emails are off so the
+# app works without your own SMTP; turn them on once custom SMTP is configured.
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+# Optional Google sign-in on Android sends a Google ID token to
 # /auth/v1/token?grant_type=id_token — configure the Web client ID here
 # (see docs/setup/SETUP.md). Secrets come from env, never from this file.
 [auth.external.google]
-enabled = true
+enabled = false
 client_id = "env(GOOGLE_WEB_CLIENT_ID)"
 secret = "env(GOOGLE_WEB_CLIENT_SECRET)"
 skip_nonce_check = false

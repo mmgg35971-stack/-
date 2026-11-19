@@ -76,6 +76,36 @@ class AuthClient @Inject constructor(
         return res.toSession().also { sessionStore.save(it) }
     }
 
+    /** Email + password sign-in (Supabase Auth). */
+    suspend fun signInWithPassword(email: String, password: String): Session {
+        val body = AppJson.encodeToString(
+            JsonObject.serializer(),
+            JsonObject(mapOf("email" to JsonPrimitive(email), "password" to JsonPrimitive(password))),
+        )
+        return post("${SupabaseConfig.url}/auth/v1/token?grant_type=password", body).toSession().also { sessionStore.save(it) }
+    }
+
+    /**
+     * Creates an email account. Returns the session when the project does not require
+     * email confirmation, or null when Supabase sent a confirmation email first.
+     */
+    suspend fun signUpWithPassword(email: String, password: String, name: String): Session? {
+        val body = AppJson.encodeToString(
+            JsonObject.serializer(),
+            JsonObject(
+                mapOf(
+                    "email" to JsonPrimitive(email),
+                    "password" to JsonPrimitive(password),
+                    "data" to JsonObject(mapOf("full_name" to JsonPrimitive(name))),
+                ),
+            ),
+        )
+        val text = postRaw("${SupabaseConfig.url}/auth/v1/signup", body)
+        val obj = AppJson.parseToJsonElement(text).jsonObject
+        if (obj["access_token"] == null) return null
+        return AppJson.decodeFromString(AuthResponse.serializer(), text).toSession().also { sessionStore.save(it) }
+    }
+
     suspend fun signOut() {
         val s = sessionStore.session.value
         if (s != null) {
@@ -108,13 +138,16 @@ class AuthClient @Inject constructor(
         }
     }
 
-    private suspend fun post(url: String, json: String): AuthResponse = withContext(Dispatchers.IO) {
+    private suspend fun post(url: String, json: String): AuthResponse =
+        AppJson.decodeFromString(AuthResponse.serializer(), postRaw(url, json))
+
+    private suspend fun postRaw(url: String, json: String): String = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url).header("apikey", SupabaseConfig.anonKey).post(json.toRequestBody(JSON_MEDIA)).build()
         try {
             http.newCall(req).execute().use { r ->
                 val text = r.body?.string().orEmpty()
-                if (!r.isSuccessful) throw parseError(r.code, text)
-                AppJson.decodeFromString(AuthResponse.serializer(), text)
+                if (!r.isSuccessful) throw authError(r.code, text)
+                text
             }
         } catch (e: IOException) {
             throw AppException(AppException.NETWORK, message = e.message ?: "io")
@@ -149,6 +182,27 @@ class SupabaseTokenAuthenticator(private val auth: AuthClient) : Authenticator {
         val token = runBlocking { auth.accessToken(forceRefresh = true) } ?: return null
         return response.request.newBuilder().header("Authorization", "Bearer $token").build()
     }
+}
+
+/** Supabase Auth errors carry `error_code` (newer) or `error` + `error_description` (older). */
+fun authError(status: Int, body: String): AppException {
+    val obj = runCatching { AppJson.parseToJsonElement(body).jsonObject }.getOrNull()
+    val errorCode = obj?.get("error_code")?.jsonPrimitive?.contentOrNull
+    val legacy = obj?.get("error")?.jsonPrimitive?.contentOrNull
+    val message = obj?.get("msg")?.jsonPrimitive?.contentOrNull
+        ?: obj?.get("error_description")?.jsonPrimitive?.contentOrNull
+        ?: obj?.get("message")?.jsonPrimitive?.contentOrNull ?: body.take(200)
+    val code = when {
+        errorCode != null -> errorCode
+        legacy == "invalid_grant" && message.contains("confirm", ignoreCase = true) -> "email_not_confirmed"
+        legacy == "invalid_grant" -> "invalid_credentials"
+        status == 429 -> "rate_limited"
+        status == 422 && message.contains("registered", ignoreCase = true) -> "user_already_exists"
+        status == 422 && message.contains("password", ignoreCase = true) -> "weak_password"
+        status in 400..499 -> "session_expired".takeIf { status == 401 } ?: "invalid_input"
+        else -> AppException.UNKNOWN
+    }
+    return AppException(code, status, message)
 }
 
 fun parseError(status: Int, body: String): AppException {
